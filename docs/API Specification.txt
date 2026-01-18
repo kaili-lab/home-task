@@ -1,0 +1,224 @@
+
+
+# API 接口契约说明（API Specification）
+
+> 本文档定义系统中 **对外可见的接口契约**，  
+> 用于 Web / Mobile 客户端与设备接入。  
+>  
+> - 不描述实现方式  
+> - 不绑定具体框架  
+> - 必须遵守 `PRD.md` 与 `domain-model.md`  
+
+---
+
+## 1. 文档定位
+
+### 1.1 本文档负责
+
+- 定义系统提供的 API 能力
+- 明确请求 / 响应的结构与语义
+- 作为前后端与 AI 生成代码的**事实来源**
+
+### 1.2 本文档不负责
+
+- 权限校验细节
+- 接口性能优化
+- 内部服务拆分
+
+---
+
+## 2. API 设计原则
+
+- ✅ 资源导向（Resource-oriented）
+- ✅ JSON 作为主要数据格式
+- ✅ 明确失败语义，而非隐式约定
+- ❌ 不在 API 层暴露数据库结构
+
+---
+
+## 3. 认证与身份（概念级）
+
+- API 调用者始终是 **User**
+- Device 使用独立身份（见 `device-integration.md`）
+- 本文档不定义 token 形式，仅假设：
+  - ✅ 请求可被识别来源身份
+
+---
+
+## 4. 核心资源与接口
+
+### 4.1 Group
+
+#### 获取用户的群组列表
+
+```
+GET /groups
+```
+
+**Response**
+```json
+{
+  "groups": [
+    {
+      "id": "string",
+      "name": "string"
+    }
+  ]
+}
+```
+
+---
+
+### 4.2 Task
+
+#### 获取某个群组下的任务列表
+
+```
+GET /groups/{groupId}/tasks
+```
+
+**Response**
+```json
+{
+  "tasks": [
+    {
+      "id": "string",
+      "title": "string",
+      "status": "pending | completed"
+    }
+  ]
+}
+```
+
+---
+
+#### 创建任务
+
+```
+POST /groups/{groupId}/tasks
+```
+
+**Request**
+```json
+{
+  "title": "string"
+}
+```
+
+**Response**
+```json
+{
+  "id": "string"
+}
+```
+
+---
+
+#### 更新任务状态
+
+```
+PATCH /tasks/{taskId}
+```
+
+**Request**
+```json
+{
+  "status": "completed"
+}
+```
+
+---
+
+### 4.3 Device（管理侧）
+
+#### 绑定设备到群组
+
+```
+POST /groups/{groupId}/device
+```
+
+**Request**
+```json
+{
+  "deviceId": "string"
+}
+```
+
+---
+
+#### 获取群组绑定的设备
+
+```
+GET /groups/{groupId}/device
+```
+
+**Response**
+```json
+{
+  "device": {
+    "id": "string",
+    "status": "online | offline"
+  }
+}
+```
+
+---
+
+## 5. Device 数据推送（抽象）
+
+> 具体协议（HTTP / MQTT / WebSocket）不在本文档中定义
+
+### 5.1 推送内容语义
+
+- 推送目标：Device
+- 推送内容：Group 当前任务状态
+
+**Payload（概念）**
+```json
+{
+  "groupId": "string",
+  "tasks": [
+    {
+      "title": "string",
+      "status": "pending | completed"
+    }
+  ]
+}
+```
+
+---
+
+## 6. 错误语义（统一约定）
+
+```json
+{
+  "error": {
+    "code": "string",
+    "message": "string"
+  }
+}
+```
+
+- `code`：用于程序判断
+- `message`：用于调试或展示
+
+---
+
+## 7. 对 AI 的约束（重要）
+
+当 AI 基于本文档生成代码时：
+
+- ✅ 不得新增未定义的 API
+- ✅ 不得假设隐藏字段
+- ❌ 不得绕过 Group 作为 Task 的归属边界
+
+---
+
+## 8. 维护原则
+
+- 当接口语义变化时必须更新
+- 新增接口应遵循既有资源模型
+- 不随实现优化频繁修改
+
+---
+
