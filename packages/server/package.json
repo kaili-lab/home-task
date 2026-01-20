@@ -8,7 +8,8 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "hono": "^4.11.4"
+    "hono": "^4.11.4",
+    "shared": "workspace:*"
   },
   "devDependencies": {
     "@hono/eslint-config": "^2.0.5",

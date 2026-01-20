@@ -17,6 +17,9 @@ importers:
       hono:
         specifier: ^4.11.4
         version: 4.11.4
+      shared:
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@hono/eslint-config':
         specifier: ^2.0.5
@@ -27,6 +30,8 @@ importers:
       wrangler:
         specifier: ^4.4.0
         version: 4.59.2
+
+  packages/shared: {}
 
 packages:
 
