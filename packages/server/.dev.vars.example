@@ -1,0 +1,11 @@
+# Neon development url
+DATABASE_URL=
+# 需要安装dotenv，以及.env文件，用来执行 npx drizzle-kit push 更新数据库
+
+BETTER_AUTH_SECRET=your-secret-key-here
+BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
+
+AIHUBMIX_API_KEY=your-api-key-here
+
+# 前端地址（用于 Stripe 支付回调）
+FRONTEND_URL=http://localhost:5173

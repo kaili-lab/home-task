@@ -8,12 +8,21 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.7.6",
+    "@neondatabase/serverless": "^1.0.2",
+    "better-auth": "^1.4.16",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.1",
     "hono": "^4.11.4",
-    "shared": "workspace:*"
+    "openai": "^6.16.0",
+    "shared": "workspace:*",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@hono/eslint-config": "^2.0.5",
+    "drizzle-kit": "^0.31.8",
     "eslint-config-prettier": "^10.1.8",
+    "typescript-eslint": "^8.53.1",
     "wrangler": "^4.4.0"
   }
 }
