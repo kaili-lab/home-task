@@ -4,6 +4,16 @@ import { tasks, groupUsers, users, groups } from "../db/schema";
 
 export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
 export type TaskSource = "ai" | "human";
+export type Priority = "high" | "medium" | "low";
+
+export type RecurringRule = {
+  type: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval: number; // 间隔（如每2周 = interval: 2）
+  daysOfWeek?: number[]; // 周几（0=周日, 1=周一...6=周六）仅weekly使用
+  dayOfMonth?: number; // 每月几号（1-31）仅monthly使用
+  endDate?: string; // 结束日期（可选，如 '2026-12-31'）
+  endAfterOccurrences?: number; // 或指定生成N次后结束
+};
 
 export interface CreateTaskInput {
   title: string;
@@ -12,6 +22,9 @@ export interface CreateTaskInput {
   assignedTo?: number | null;
   dueDate?: Date | null;
   source?: TaskSource;
+  priority?: Priority;
+  isRecurring?: boolean;
+  recurringRule?: RecurringRule;
 }
 
 export interface UpdateTaskInput {
@@ -19,12 +32,17 @@ export interface UpdateTaskInput {
   description?: string;
   assignedTo?: number | null;
   dueDate?: Date | null;
+  priority?: Priority;
+  isRecurring?: boolean;
+  recurringRule?: RecurringRule | null;
 }
 
 export interface TaskFilters {
   status?: TaskStatus;
   groupId?: number;
   assignedTo?: number | "me";
+  priority?: Priority;
+  excludeRecurringInstances?: boolean; // 是否排除重复任务的子实例
   page?: number;
   limit?: number;
 }
@@ -34,6 +52,7 @@ export interface TaskInfo {
   title: string;
   description: string | null;
   status: TaskStatus;
+  priority: Priority;
   groupId: number | null;
   groupName: string | null;
   createdBy: number;
@@ -45,6 +64,9 @@ export interface TaskInfo {
   completedAt: Date | null;
   dueDate: Date | null;
   source: TaskSource;
+  isRecurring: boolean;
+  recurringRule: RecurringRule | null;
+  recurringParentId: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -112,7 +134,7 @@ export class TaskService {
     }
 
     // 创建任务记录
-    const [task] = await this.db
+    const result = await this.db
       .insert(tasks)
       .values({
         title: data.title,
@@ -122,9 +144,18 @@ export class TaskService {
         assignedTo: data.assignedTo || null,
         dueDate: data.dueDate || null,
         source: data.source || "human",
+        priority: data.priority || "medium",
+        isRecurring: data.isRecurring || false,
+        recurringRule: data.recurringRule ? JSON.stringify(data.recurringRule) : null,
+        recurringParentId: null, // 创建时总是null，只有生成的实例才有值
         status: "pending",
       })
-      .returning();
+      .returning() as Array<typeof tasks.$inferSelect>;
+
+    const task = result[0];
+    if (!task) {
+      throw new Error("创建任务失败");
+    }
 
     // 获取完整任务信息（包含关联数据）
     return this.getTaskById(task.id, userId);
@@ -185,6 +216,16 @@ export class TaskService {
       }
     }
 
+    // 优先级筛选
+    if (filters.priority) {
+      conditions.push(eq(tasks.priority, filters.priority));
+    }
+
+    // 排除重复任务实例
+    if (filters.excludeRecurringInstances) {
+      conditions.push(isNull(tasks.recurringParentId));
+    }
+
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     // 查询总数
@@ -234,6 +275,7 @@ export class TaskService {
         title: task.title,
         description: task.description,
         status: task.status as TaskStatus,
+        priority: task.priority as Priority,
         groupId: task.groupId,
         groupName: row.groups?.name || null,
         createdBy: task.createdBy,
@@ -245,6 +287,9 @@ export class TaskService {
         completedAt: task.completedAt,
         dueDate: task.dueDate,
         source: task.source as TaskSource,
+        isRecurring: task.isRecurring,
+        recurringRule: task.recurringRule ? JSON.parse(task.recurringRule as string) as RecurringRule : null,
+        recurringParentId: task.recurringParentId,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       };
@@ -324,6 +369,7 @@ export class TaskService {
       title: task.title,
       description: task.description,
       status: task.status as TaskStatus,
+      priority: task.priority as Priority,
       groupId: task.groupId,
       groupName: group?.name || null,
       createdBy: task.createdBy,
@@ -335,6 +381,9 @@ export class TaskService {
       completedAt: task.completedAt,
       dueDate: task.dueDate,
       source: task.source as TaskSource,
+      isRecurring: task.isRecurring,
+      recurringRule: task.recurringRule ? JSON.parse(task.recurringRule as string) as RecurringRule : null,
+      recurringParentId: task.recurringParentId,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     };
@@ -395,6 +444,15 @@ export class TaskService {
     }
     if (data.dueDate !== undefined) {
       updateData.dueDate = data.dueDate;
+    }
+    if (data.priority !== undefined) {
+      updateData.priority = data.priority;
+    }
+    if (data.isRecurring !== undefined) {
+      updateData.isRecurring = data.isRecurring;
+    }
+    if (data.recurringRule !== undefined) {
+      updateData.recurringRule = data.recurringRule ? JSON.stringify(data.recurringRule) : null;
     }
     updateData.updatedAt = new Date();
 

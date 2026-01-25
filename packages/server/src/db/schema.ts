@@ -1,6 +1,24 @@
 import { pgTable, serial, varchar, text, timestamp, boolean, integer, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
+// ==================== 枚举定义 ====================
+// 注意：所有枚举必须在表定义之前声明
+
+// 任务状态枚举
+export const taskStatusEnum = pgEnum("task_status", ["pending", "in_progress", "completed", "cancelled"]);
+
+// 任务来源枚举
+export const taskSourceEnum = pgEnum("task_source", ["ai", "human"]);
+
+// 任务优先级枚举
+export const priorityEnum = pgEnum("priority", ["high", "medium", "low"]);
+
+// 消息类型枚举
+export const messageTypeEnum = pgEnum("message_type", ["text", "task_summary", "question"]);
+
+// 消息角色枚举
+export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system"]);
+
 // ==================== Better Auth 表 ====================
 // Better Auth 需要的表结构，使用数字自增ID
 
@@ -88,18 +106,13 @@ export const groupUsers = pgTable("group_users", {
   },
 }));
 
-// 任务状态枚举
-export const taskStatusEnum = pgEnum("task_status", ["pending", "in_progress", "completed", "cancelled"]);
-
-// 任务来源枚举
-export const taskSourceEnum = pgEnum("task_source", ["ai", "human"]);
-
 // 任务表
 export const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 200 }).notNull(), // 任务内容
   description: text("description"), // 任务详情
   status: taskStatusEnum("status").notNull().default("pending"), // pending / completed / cancelled
+  priority: priorityEnum("priority").notNull().default("medium"), // 优先级
   
   // 归属逻辑
   groupId: integer("groupId").references(() => groups.id, { onDelete: "cascade" }), // NULL = 个人私有任务; 有值 = 群组公开任务
@@ -112,6 +125,11 @@ export const tasks = pgTable("tasks", {
   // 完成逻辑
   completedBy: integer("completedBy").references(() => users.id, { onDelete: "set null" }), // [FK] 记录是谁完成的
   completedAt: timestamp("completedAt"),
+  
+  // 重复任务逻辑
+  isRecurring: boolean("isRecurring").notNull().default(false), // 是否为重复任务
+  recurringRule: jsonb("recurringRule"), // 重复规则（JSON格式）
+  recurringParentId: integer("recurringParentId").references((): any => tasks.id, { onDelete: "set null" }), // 如果是由重复任务生成的实例，指向父任务
   
   // 辅助字段
   dueDate: timestamp("dueDate"), // 截止时间
@@ -132,12 +150,6 @@ export const devices = pgTable("devices", {
   status: varchar("status", { length: 20 }).notNull().default("active"), // active / inactive
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
-
-// 消息类型枚举
-export const messageTypeEnum = pgEnum("message_type", ["text", "task_summary", "question"]);
-
-// 消息角色枚举
-export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system"]);
 
 // 消息表
 export const messages = pgTable("messages", {
@@ -191,7 +203,7 @@ export const groupUsersRelations = relations(groupUsers, ({ one }) => ({
   }),
 }));
 
-export const tasksRelations = relations(tasks, ({ one }) => ({
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
   group: one(groups, {
     fields: [tasks.groupId],
     references: [groups.id],
@@ -210,6 +222,14 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
     fields: [tasks.completedBy],
     references: [users.id],
     relationName: "completedBy",
+  }),
+  recurringParent: one(tasks, {
+    fields: [tasks.recurringParentId],
+    references: [tasks.id],
+    relationName: "recurringParent",
+  }),
+  recurringChildren: many(tasks, {
+    relationName: "recurringParent",
   }),
 }));
 

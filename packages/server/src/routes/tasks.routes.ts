@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthenticatedVariables } from "../types/variables";
 import type { Bindings } from "../types/bindings";
-import { TaskService, type TaskStatus } from "../services/task.service";
+import { TaskService, type TaskStatus, type Priority } from "../services/task.service";
 import { getUserId, successResponse } from "../utils/route-helpers";
 import { handleServiceError } from "../utils/error-handler";
 
@@ -19,6 +19,16 @@ const createTaskSchema = z.object({
   groupId: z.number().int().positive().nullable().optional(),
   assignedTo: z.number().int().positive().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
+  priority: z.enum(["high", "medium", "low"]).optional(),
+  isRecurring: z.boolean().optional(),
+  recurringRule: z.object({
+    type: z.enum(["daily", "weekly", "monthly", "yearly"]),
+    interval: z.number().int().positive(),
+    daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
+    endDate: z.string().optional(),
+    endAfterOccurrences: z.number().int().positive().optional(),
+  }).nullable().optional(),
 });
 
 // 更新任务的Zod Schema
@@ -27,6 +37,16 @@ const updateTaskSchema = z.object({
   description: z.string().optional(),
   assignedTo: z.number().int().positive().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
+  priority: z.enum(["high", "medium", "low"]).optional(),
+  isRecurring: z.boolean().optional(),
+  recurringRule: z.object({
+    type: z.enum(["daily", "weekly", "monthly", "yearly"]),
+    interval: z.number().int().positive(),
+    daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
+    endDate: z.string().optional(),
+    endAfterOccurrences: z.number().int().positive().optional(),
+  }).nullable().optional(),
 });
 
 // 更新任务状态的Zod Schema
@@ -49,6 +69,9 @@ tasksRoutes.post("/", zValidator("json", createTaskSchema), async (c) => {
     const task = await taskService.createTask(userId, {
       ...data,
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      priority: data.priority,
+      isRecurring: data.isRecurring,
+      recurringRule: data.recurringRule,
     });
 
     return c.json(successResponse(task), 201);
@@ -71,6 +94,8 @@ tasksRoutes.get("/", async (c) => {
     const status = c.req.query("status") as TaskStatus | undefined;
     const groupIdParam = c.req.query("groupId");
     const assignedToParam = c.req.query("assignedTo");
+    const priorityParam = c.req.query("priority");
+    const excludeRecurringInstancesParam = c.req.query("excludeRecurringInstances");
     const pageParam = c.req.query("page");
     const limitParam = c.req.query("limit");
 
@@ -114,6 +139,14 @@ tasksRoutes.get("/", async (c) => {
       if (!isNaN(limit) && limit > 0) {
         filters.limit = limit;
       }
+    }
+
+    if (priorityParam && ["high", "medium", "low"].includes(priorityParam)) {
+      filters.priority = priorityParam as Priority;
+    }
+
+    if (excludeRecurringInstancesParam === "true") {
+      filters.excludeRecurringInstances = true;
     }
 
     const taskService = new TaskService(db);
@@ -181,6 +214,9 @@ tasksRoutes.patch("/:id", zValidator("json", updateTaskSchema), async (c) => {
     const task = await taskService.updateTask(taskId, userId, {
       ...data,
       dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      priority: data.priority,
+      isRecurring: data.isRecurring,
+      recurringRule: data.recurringRule,
     });
 
     return c.json(successResponse(task));

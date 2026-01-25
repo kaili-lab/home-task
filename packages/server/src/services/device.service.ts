@@ -24,6 +24,7 @@ export interface DeviceTask {
   id: number;
   title: string;
   status: string;
+  priority: string;
   dueDate: Date | null;
   createdAt: Date;
 }
@@ -233,6 +234,7 @@ export class DeviceService {
       id: task.id,
       title: task.title,
       status: task.status,
+      priority: task.priority,
       dueDate: task.dueDate,
       createdAt: task.createdAt,
     }));
