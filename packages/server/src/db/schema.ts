@@ -19,20 +19,12 @@ export const users = pgTable("user", {
   avatar: text("avatar"),
   role: varchar("role", { length: 20 }).notNull().default("user"), // admin / user
   defaultGroupId: integer("defaultGroupId"), // [FK] 外键 -> groups.id，语音创建任务时的默认归属
-  phoneNumber: varchar("phoneNumber", { length: 20 }),
-  phoneNumberVerified: boolean("phoneNumberVerified").default(false),
-  status: varchar("status", { length: 20 }).notNull().default("active"),
-  locale: varchar("locale", { length: 10 }).notNull().default("zh-CN"),
-  vocabularyLevel: varchar("vocabularyLevel", { length: 50 }),
-  lastLoginAt: timestamp("lastLoginAt"),
 });
 
 export const sessions = pgTable("session", {
   id: serial("id").primaryKey(),
   expiresAt: timestamp("expiresAt").notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
-  ipAddress: varchar("ipAddress", { length: 45 }),
-  userAgent: text("userAgent"),
   userId: integer("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -123,7 +115,6 @@ export const tasks = pgTable("tasks", {
   
   // 辅助字段
   dueDate: timestamp("dueDate"), // 截止时间
-  isAiCreated: boolean("isAiCreated").notNull().default(false), // 是否由 Agent 创建
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });

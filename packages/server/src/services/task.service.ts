@@ -45,7 +45,6 @@ export interface TaskInfo {
   completedAt: Date | null;
   dueDate: Date | null;
   source: TaskSource;
-  isAiCreated: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -123,7 +122,6 @@ export class TaskService {
         assignedTo: data.assignedTo || null,
         dueDate: data.dueDate || null,
         source: data.source || "human",
-        isAiCreated: data.source === "ai",
         status: "pending",
       })
       .returning();
@@ -247,7 +245,6 @@ export class TaskService {
         completedAt: task.completedAt,
         dueDate: task.dueDate,
         source: task.source as TaskSource,
-        isAiCreated: task.isAiCreated,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       };
@@ -338,7 +335,6 @@ export class TaskService {
       completedAt: task.completedAt,
       dueDate: task.dueDate,
       source: task.source as TaskSource,
-      isAiCreated: task.isAiCreated,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     };

@@ -64,37 +64,8 @@ export const createAuth = (env: Bindings) => {
       },
       // 用于声明 Better Auth 默认 user 表之外的自定义业务字段
       // 让框架知道数据库中有这些额外字段，在读写用户数据时能正确处理
-      // 配置后，TypeScript 会知道 user.status、user.locale 等字段的类型
       // 自动处理默认值
-      additionalFields: {
-        phoneNumber: {
-          type: "string",
-          required: false, // false表示创建时是可选的，true表示必填
-        },
-        phoneNumberVerified: {
-          type: "boolean",
-          required: false,
-          defaultValue: false,
-        },
-        status: {
-          type: "string",
-          required: true,
-          defaultValue: "active",
-        },
-        locale: {
-          type: "string",
-          required: true,
-          defaultValue: "zh-CN",
-        },
-        vocabularyLevel: {
-          type: "string",
-          required: false, // 🔧 修正：词汇等级是可选字段，用户注册时可以为空
-        },
-        lastLoginAt: {
-          type: "date",
-          required: false,
-        },
-      },
+      additionalFields: {},
     },
 
     // 🔐 认证方式配置

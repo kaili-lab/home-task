@@ -307,7 +307,7 @@ export class AIService {
       throw new Error("任务不存在");
     }
 
-    if (!task.isAiCreated) {
+    if (task.source !== "ai") {
       throw new Error("该任务不是由AI创建的");
     }
 
