@@ -288,104 +288,184 @@ ESP32解析JSON
 
 
 ## 5. 数据库设计
+
+**注意：** 本项目使用 PostgreSQL 数据库，所有表使用自增数字 ID（serial）而非 UUID。
+
+### 5.1 枚举类型定义
+
+```plain
+// 任务状态枚举
+task_status: pending | in_progress | completed | cancelled
+
+// 任务来源枚举
+task_source: ai | human
+
+// 任务优先级枚举
+priority: high | medium | low
+
+// 消息类型枚举
+message_type: text | task_summary | question
+
+// 消息角色枚举
+message_role: user | assistant | system
+```
+
+### 5.2 表结构定义
+
 ```plain
 // 1. users（用户表）
 // 核心逻辑：defaultGroupId 用于语音交互时快速确定上下文
 {
-  id: UUID PRIMARY KEY,
-  phone: VARCHAR(20) UNIQUE,
-  email: VARCHAR(50) UNIQUE,
+  id: SERIAL PRIMARY KEY,
+  email: VARCHAR(255) UNIQUE NOT NULL,
+  emailVerified: BOOLEAN NOT NULL DEFAULT false,
+  name: VARCHAR(255),
+  image: VARCHAR(500),        // Better Auth映射为avatarUrl
+  phone: VARCHAR(20),          // 可选，暂不使用手机号功能
   nickname: VARCHAR(50),
   avatar: TEXT,
-  role: VARCHAR(20),       // admin / user
-  defaultGroupId: UUID,    // [FK] 外键 -> groups.id，语音创建任务时的默认归属
-  createdAt: TIMESTAMP,
-  updatedAt: TIMESTAMP
+  role: VARCHAR(20) NOT NULL DEFAULT 'user',  // admin / user
+  defaultGroupId: INTEGER,     // [FK] 外键 -> groups.id，语音创建任务时的默认归属
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW(),
+  updatedAt: TIMESTAMP NOT NULL DEFAULT NOW()
 }
 
-// 2. groups（群组表）
+// 2. sessions（会话表）
+// Better Auth 框架管理的会话表
+{
+  id: SERIAL PRIMARY KEY,
+  expiresAt: TIMESTAMP NOT NULL,
+  token: VARCHAR(255) UNIQUE NOT NULL,
+  userId: INTEGER NOT NULL,    // [FK] 外键 -> users.id
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW(),
+  updatedAt: TIMESTAMP NOT NULL DEFAULT NOW()
+}
+
+// 3. accounts（账户表）
+// Better Auth 框架管理的账户表（支持多账户登录）
+{
+  id: SERIAL PRIMARY KEY,
+  accountId: VARCHAR(255) NOT NULL,
+  providerId: VARCHAR(255) NOT NULL,
+  userId: INTEGER NOT NULL,    // [FK] 外键 -> users.id
+  accessToken: TEXT,
+  refreshToken: TEXT,
+  idToken: TEXT,
+  expiresAt: TIMESTAMP,
+  password: VARCHAR(255),
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW(),
+  updatedAt: TIMESTAMP NOT NULL DEFAULT NOW()
+}
+
+// 4. verifications（验证表）
+// Better Auth 框架管理的验证表（邮箱验证等）
+{
+  id: SERIAL PRIMARY KEY,
+  identifier: VARCHAR(255) NOT NULL,
+  value: VARCHAR(255) NOT NULL,
+  expiresAt: TIMESTAMP NOT NULL,
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW(),
+  updatedAt: TIMESTAMP NOT NULL DEFAULT NOW()
+}
+
+// 5. groups（群组表）
 // 核心逻辑：inviteCode 实现精确查找，无需搜索
 {
-  id: UUID PRIMARY KEY,
-  name: VARCHAR(100),
-  inviteCode: VARCHAR(20) UNIQUE, // [新增] 全局唯一邀请码 (如 "8859")
+  id: SERIAL PRIMARY KEY,
+  name: VARCHAR(100) NOT NULL,
+  inviteCode: VARCHAR(20) UNIQUE NOT NULL,  // 全局唯一邀请码 (如 "8859")
   avatar: TEXT,
-  createdAt: TIMESTAMP,
-  updatedAt: TIMESTAMP
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW(),
+  updatedAt: TIMESTAMP NOT NULL DEFAULT NOW()
 }
 
-// 3. group_users（群组成员关联表）
+// 6. group_users（群组成员关联表）
 // 核心逻辑：控制成员状态和角色
 {
-  id: UUID PRIMARY KEY,
-  groupId: UUID,           // [FK] 外键 -> groups.id
-  userId: UUID,            // [FK] 外键 -> users.id
-  role: VARCHAR(20),       // owner (群主) / member (成员)
-  status: VARCHAR(20),     // active (已加入) / pending (邀请中)
-  joinedAt: TIMESTAMP,
+  id: SERIAL PRIMARY KEY,
+  groupId: INTEGER NOT NULL,   // [FK] 外键 -> groups.id
+  userId: INTEGER NOT NULL,    // [FK] 外键 -> users.id
+  role: VARCHAR(20) NOT NULL DEFAULT 'member',  // owner (群主) / member (成员)
+  status: VARCHAR(20) NOT NULL DEFAULT 'active',  // active (已加入) / pending (邀请中)
+  joinedAt: TIMESTAMP NOT NULL DEFAULT NOW(),
   
-  // 索引约束：(groupId, userId) 必须唯一，防止重复加群
-  UNIQUE KEY (groupId, userId)
+  // 唯一约束：(groupId, userId) 必须唯一，防止重复加群
+  UNIQUE (groupId, userId)
 }
 
-// 4. tasks（任务表）
-// 核心逻辑：通过 groupId 区分个人/群组任务，支持 AI 字段
+// 7. tasks（任务表）
+// 核心逻辑：通过 groupId 区分个人/群组任务，支持优先级和重复任务
 {
-  id: UUID PRIMARY KEY,
-  title: VARCHAR(200),     // 任务内容
-  description: TEXT,       // 任务详情
-  status: VARCHAR(20),     // pending / completed / cancelled
+  id: SERIAL PRIMARY KEY,
+  title: VARCHAR(200) NOT NULL,     // 任务内容
+  description: TEXT,                 // 任务详情
+  status: task_status NOT NULL DEFAULT 'pending',  // pending / in_progress / completed / cancelled
+  priority: priority NOT NULL DEFAULT 'medium',    // high / medium / low
   
   // 归属逻辑
-  groupId: UUID,           // [FK] NULL = 个人私有任务; 有值 = 群组公开任务
-  createdBy: UUID,         // [FK] 创建人
-  source: VARCHAR(10)			 // ai/human
-  assignedTo: UUID,         // [FK] 外键 -> users.id，分配给谁（NULL = 未分配或分配给创建者）
+  groupId: INTEGER,                  // [FK] NULL = 个人私有任务; 有值 = 群组公开任务
+  createdBy: INTEGER NOT NULL,       // [FK] 创建人
+  source: task_source NOT NULL DEFAULT 'human',  // ai / human
+  assignedTo: INTEGER,               // [FK] 外键 -> users.id，分配给谁（NULL = 未分配或分配给创建者）
   
   // 完成逻辑
-  completedBy: UUID,       // [FK] 记录是谁完成的
+  completedBy: INTEGER,              // [FK] 记录是谁完成的
   completedAt: TIMESTAMP,
   
+  // 重复任务逻辑
+  isRecurring: BOOLEAN NOT NULL DEFAULT false,     // 是否为重复任务
+  recurringRule: JSONB,                            // 重复规则（JSON格式，见下方说明）
+  recurringParentId: INTEGER,                      // [FK] 自引用 -> tasks.id，如果是由重复任务生成的实例，指向父任务
+  
   // 辅助字段
-  dueDate: TIMESTAMP,      // 截止时间
-  isAiCreated: BOOLEAN,    // 是否由 Agent 创建
-  createdAt: TIMESTAMP,
-  updatedAt: TIMESTAMP
+  dueDate: TIMESTAMP,                // 截止时间
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW(),
+  updatedAt: TIMESTAMP NOT NULL DEFAULT NOW()
+}
+
+// 重复规则（recurringRule）JSON 结构示例：
+{
+  type: 'daily' | 'weekly' | 'monthly' | 'yearly',
+  interval: number,                  // 间隔（如每2周 = interval: 2）
+  daysOfWeek?: number[],             // 周几（0=周日, 1=周一...6=周六）仅weekly使用
+  dayOfMonth?: number,               // 每月几号（1-31）仅monthly使用
+  endDate?: string,                  // 结束日期（可选，如 '2026-12-31'）
+  endAfterOccurrences?: number       // 或指定生成N次后结束
 }
 ```
 
-<font style="color:rgba(0, 0, 0, 0.96);">硬件与 AI 交互表</font>
+### 5.3 硬件与 AI 交互表
 
 ```plain
-// 5. devices（设备表）
+// 8. devices（设备表）
 // 核心逻辑：设备绑定人或群，决定屏幕显示什么维度的任务
 {
-  id: UUID PRIMARY KEY,
-  deviceId: VARCHAR(100) UNIQUE, // 硬件唯一标识
-  name: VARCHAR(50),
+  id: SERIAL PRIMARY KEY,
+  deviceId: VARCHAR(100) UNIQUE NOT NULL,  // 硬件唯一标识
+  name: VARCHAR(50) NOT NULL,
   
   // 互斥绑定逻辑 (业务层控制二选一)
-  userId: UUID,            // [FK] 绑定个人 -> 显示: 个人私有 + 该人所在所有群组
-  groupId: UUID,           // [FK] 绑定群组 -> 显示: 仅该群组公开任务
+  userId: INTEGER,         // [FK] 绑定个人 -> 显示: 个人私有 + 该人所在所有群组
+  groupId: INTEGER,        // [FK] 绑定群组 -> 显示: 仅该群组公开任务
   
-  status: VARCHAR(20),     // active / inactive
-  createdAt: TIMESTAMP
+  status: VARCHAR(20) NOT NULL DEFAULT 'active',  // active / inactive
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW()
 }
 
-// 6. messages（消息表）
+// 9. messages（消息表）
 // 核心逻辑：存储 AI 对话历史，支持 Generative UI
 {
-  id: UUID PRIMARY KEY,
-  userId: UUID,            // [FK] 属于哪个用户
+  id: SERIAL PRIMARY KEY,
+  userId: INTEGER NOT NULL,  // [FK] 属于哪个用户
   
-  role: VARCHAR(20),       // user / assistant / system
-  content: TEXT,           // 文本内容 (用于搜索和降级展示)
+  role: message_role NOT NULL,  // user / assistant / system
+  content: TEXT NOT NULL,        // 文本内容 (用于搜索和降级展示)
   
   // UI 渲染核心
-  type: VARCHAR(20),       // text (普通对话) / task_summary (任务卡片) / question (追问)
-  payload: JSONB,          // 结构化数据，用于 RN 渲染组件 (如任务详情、确认按钮等)
+  type: message_type NOT NULL DEFAULT 'text',  // text (普通对话) / task_summary (任务卡片) / question (追问)
+  payload: JSONB,                             // 结构化数据，用于 RN 渲染组件 (如任务详情、确认按钮等)
   
-  createdAt: TIMESTAMP
+  createdAt: TIMESTAMP NOT NULL DEFAULT NOW()
 }
 ```
 
@@ -479,12 +559,12 @@ API开发将按以下优先级分阶段实现：
 **响应：**
 ```json
 {
-  "id": "uuid",
+  "id": 1,
   "email": "user@example.com",
   "nickname": "用户名",
   "avatar": "https://...",
   "role": "user",
-  "defaultGroupId": "uuid" | null
+  "defaultGroupId": 1 | null
 }
 ```
 
@@ -496,7 +576,7 @@ API开发将按以下优先级分阶段实现：
 {
   "nickname": "新昵称",
   "avatar": "https://...",
-  "defaultGroupId": "uuid" | null
+  "defaultGroupId": number | null
 }
 ```
 
@@ -508,7 +588,7 @@ API开发将按以下优先级分阶段实现：
 {
   "groups": [
     {
-      "id": "uuid",
+      "id": 1,
       "name": "群组名称",
       "inviteCode": "8859",
       "avatar": "https://...",
@@ -535,7 +615,7 @@ API开发将按以下优先级分阶段实现：
 **响应：**
 ```json
 {
-  "id": "uuid",
+  "id": 1,
   "name": "群组名称",
   "inviteCode": "8859", // 系统自动生成
   "avatar": "https://...",
@@ -550,18 +630,18 @@ API开发将按以下优先级分阶段实现：
 获取群组详情
 
 **路径参数：**
-- `id`: 群组 UUID
+- `id`: 群组 ID（数字）
 
 **响应：**
 ```json
 {
-  "id": "uuid",
+  "id": 1,
   "name": "群组名称",
   "inviteCode": "8859",
   "avatar": "https://...",
   "members": [
     {
-      "userId": "uuid",
+      "userId": 1,
       "nickname": "成员昵称",
       "role": "owner" | "member",
       "joinedAt": "2024-01-01T00:00:00Z"
@@ -573,6 +653,9 @@ API开发将按以下优先级分阶段实现：
 
 #### PATCH /api/groups/:id
 更新群组信息（仅群主）
+
+**路径参数：**
+- `id`: 群组 ID（数字）
 
 **请求体：**
 ```json
@@ -595,7 +678,7 @@ API开发将按以下优先级分阶段实现：
 **响应：**
 ```json
 {
-  "groupId": "uuid",
+  "groupId": 1,
   "groupName": "群组名称",
   "role": "member"
 }
@@ -605,8 +688,8 @@ API开发将按以下优先级分阶段实现：
 退出群组或移除成员
 
 **路径参数：**
-- `id`: 群组 UUID
-- `userId`: 用户 UUID（移除成员时）或当前用户ID（退出群组时）
+- `id`: 群组 ID（数字）
+- `userId`: 用户 ID（数字，移除成员时）或当前用户ID（退出群组时）
 
 **权限：**
 - 成员可以退出自己
@@ -616,7 +699,7 @@ API开发将按以下优先级分阶段实现：
 解散群组（仅群主）
 
 **路径参数：**
-- `id`: 群组 UUID
+- `id`: 群组 ID（数字）
 
 ### 9.5 任务相关 API
 
@@ -628,26 +711,40 @@ API开发将按以下优先级分阶段实现：
 {
   "title": "任务标题",
   "description": "任务详情", // 可选
-  "groupId": "uuid" | null, // null = 个人任务，有值 = 群组任务
-  "assignedTo": "uuid" | null, // 分配给谁（可选，默认分配给创建者）
-  "dueDate": "2024-01-01T15:00:00Z" // 可选，截止时间
+  "groupId": number | null, // null = 个人任务，有值 = 群组任务
+  "assignedTo": number | null, // 分配给谁（可选，默认分配给创建者）
+  "dueDate": "2024-01-01T15:00:00Z", // 可选，截止时间
+  "priority": "high" | "medium" | "low", // 可选，优先级，默认 "medium"
+  "isRecurring": boolean, // 可选，是否为重复任务，默认 false
+  "recurringRule": { // 可选，重复规则（仅当 isRecurring 为 true 时有效）
+    "type": "daily" | "weekly" | "monthly" | "yearly",
+    "interval": number,
+    "daysOfWeek": [number], // 可选，仅 weekly 使用
+    "dayOfMonth": number, // 可选，仅 monthly 使用
+    "endDate": "2026-12-31", // 可选
+    "endAfterOccurrences": number // 可选
+  }
 }
 ```
 
 **响应：**
 ```json
 {
-  "id": "uuid",
+  "id": 1,
   "title": "任务标题",
   "description": "任务详情",
   "status": "pending",
-  "groupId": "uuid" | null,
-  "createdBy": "uuid",
-  "assignedTo": "uuid" | null,
+  "priority": "medium",
+  "groupId": 1 | null,
+  "createdBy": 1,
+  "assignedTo": 1 | null,
   "dueDate": "2024-01-01T15:00:00Z" | null,
   "source": "human",
-  "isAiCreated": false,
-  "createdAt": "2024-01-01T00:00:00Z"
+  "isRecurring": false,
+  "recurringRule": null,
+  "recurringParentId": null,
+  "createdAt": "2024-01-01T00:00:00Z",
+  "updatedAt": "2024-01-01T00:00:00Z"
 }
 ```
 
@@ -655,9 +752,11 @@ API开发将按以下优先级分阶段实现：
 获取混合任务流（个人任务 + 所有群组任务）
 
 **查询参数：**
-- `status`: `pending` | `completed` | `cancelled`（可选，筛选状态）
-- `groupId`: `uuid`（可选，筛选特定群组）
-- `assignedTo`: `uuid` | `me`（可选，筛选分配给谁的任务）
+- `status`: `pending` | `in_progress` | `completed` | `cancelled`（可选，筛选状态）
+- `groupId`: `number`（可选，筛选特定群组）
+- `assignedTo`: `number` | `me`（可选，筛选分配给谁的任务）
+- `priority`: `high` | `medium` | `low`（可选，筛选优先级）
+- `excludeRecurringInstances`: `true`（可选，排除重复任务的子实例）
 - `page`: `number`（可选，分页，默认1）
 - `limit`: `number`（可选，每页数量，默认20）
 
@@ -666,19 +765,25 @@ API开发将按以下优先级分阶段实现：
 {
   "tasks": [
     {
-      "id": "uuid",
+      "id": 1,
       "title": "任务标题",
       "description": "任务详情",
       "status": "pending",
-      "groupId": "uuid" | null,
+      "priority": "medium",
+      "groupId": 1 | null,
       "groupName": "群组名称" | null, // 如果是群组任务
-      "createdBy": "uuid",
+      "createdBy": 1,
       "createdByName": "创建者昵称",
-      "assignedTo": "uuid" | null,
+      "assignedTo": 1 | null,
       "assignedToName": "被分配者昵称" | null,
+      "completedBy": null,
+      "completedByName": null,
+      "completedAt": null,
       "dueDate": "2024-01-01T15:00:00Z" | null,
       "source": "ai" | "human",
-      "isAiCreated": true,
+      "isRecurring": false,
+      "recurringRule": null,
+      "recurringParentId": null,
       "createdAt": "2024-01-01T00:00:00Z",
       "updatedAt": "2024-01-01T00:00:00Z"
     }
@@ -696,27 +801,30 @@ API开发将按以下优先级分阶段实现：
 获取任务详情
 
 **路径参数：**
-- `id`: 任务 UUID
+- `id`: 任务 ID（数字）
 
 **响应：**
 ```json
 {
-  "id": "uuid",
+  "id": 1,
   "title": "任务标题",
   "description": "任务详情",
   "status": "pending",
-  "groupId": "uuid" | null,
+  "priority": "medium",
+  "groupId": 1 | null,
   "groupName": "群组名称" | null,
-  "createdBy": "uuid",
+  "createdBy": 1,
   "createdByName": "创建者昵称",
-  "assignedTo": "uuid" | null,
+  "assignedTo": 1 | null,
   "assignedToName": "被分配者昵称" | null,
-  "completedBy": "uuid" | null,
-  "completedByName": "完成者昵称" | null,
-  "completedAt": "2024-01-01T00:00:00Z" | null,
+  "completedBy": null,
+  "completedByName": null,
+  "completedAt": null,
   "dueDate": "2024-01-01T15:00:00Z" | null,
   "source": "ai" | "human",
-  "isAiCreated": true,
+  "isRecurring": false,
+  "recurringRule": null,
+  "recurringParentId": null,
   "createdAt": "2024-01-01T00:00:00Z",
   "updatedAt": "2024-01-01T00:00:00Z"
 }
@@ -730,18 +838,31 @@ API开发将按以下优先级分阶段实现：
 {
   "title": "新标题", // 可选
   "description": "新详情", // 可选
-  "assignedTo": "uuid" | null, // 可选，重新分配
-  "dueDate": "2024-01-01T15:00:00Z" | null // 可选
+  "assignedTo": number | null, // 可选，重新分配
+  "dueDate": "2024-01-01T15:00:00Z" | null, // 可选
+  "priority": "high" | "medium" | "low", // 可选，更新优先级
+  "isRecurring": boolean, // 可选，更新是否为重复任务
+  "recurringRule": { // 可选，更新重复规则（可设置为 null 清除）
+    "type": "daily" | "weekly" | "monthly" | "yearly",
+    "interval": number,
+    "daysOfWeek": [number],
+    "dayOfMonth": number,
+    "endDate": "2026-12-31",
+    "endAfterOccurrences": number
+  } | null
 }
 ```
 
 #### PATCH /api/tasks/:id/status
 更新任务状态
 
+**路径参数：**
+- `id`: 任务 ID（数字）
+
 **请求体：**
 ```json
 {
-  "status": "completed" | "cancelled" | "pending"
+  "status": "pending" | "in_progress" | "completed" | "cancelled"
 }
 ```
 
@@ -753,7 +874,7 @@ API开发将按以下优先级分阶段实现：
 删除任务
 
 **路径参数：**
-- `id`: 任务 UUID
+- `id`: 任务 ID（数字）
 
 **权限：**
 - 仅创建者可以删除任务
@@ -792,7 +913,7 @@ data: {"type": "thinking", "content": "正在思考..."}
 
 data: {"type": "tool_call", "tool": "create_task", "params": {...}}
 
-data: {"type": "message", "content": "好的，我为你创建了以下任务：\n\n【开家长会】\n📅 明天 15:00\n👤 分配给：你\n🔔 提醒功能（暂不实现）\n\n任务已添加到列表中。", "payload": {"taskId": "uuid", "task": {...}}}
+data: {"type": "message", "content": "好的，我为你创建了以下任务：\n\n【开家长会】\n📅 明天 15:00\n👤 分配给：你\n🔔 提醒功能（暂不实现）\n\n任务已添加到列表中。", "payload": {"taskId": 1, "task": {...}}}
 
 data: {"type": "done"}
 ```
@@ -812,12 +933,12 @@ data: {"type": "done"}
 {
   "messages": [
     {
-      "id": "uuid",
+      "id": 1,
       "role": "user" | "assistant" | "system",
       "content": "消息内容",
       "type": "text" | "task_summary" | "question",
       "payload": {
-        "taskId": "uuid", // type为task_summary时存在
+        "taskId": 1, // type为task_summary时存在
         "task": {...} // type为task_summary时存在
       },
       "createdAt": "2024-01-01T00:00:00Z"
@@ -830,7 +951,7 @@ data: {"type": "done"}
 确认 AI 创建的任务
 
 **路径参数：**
-- `id`: 任务 UUID
+- `id`: 任务 ID（数字）
 
 **请求体：**
 ```json
@@ -840,7 +961,8 @@ data: {"type": "done"}
 ```
 
 **说明：**
-- 用于用户确认 AI 创建的任务，可以触发后续操作（如发送通知等，暂不实现）
+- 用于用户确认 AI 创建的任务（通过 `source === "ai"` 判断是否为 AI 创建）
+- 可以触发后续操作（如发送通知等，暂不实现）
 
 ### 9.7 设备相关 API
 
@@ -852,19 +974,19 @@ data: {"type": "done"}
 {
   "deviceId": "ESP32_001", // 硬件唯一标识
   "name": "客厅显示屏", // 设备名称
-  "userId": "uuid" | null, // 绑定到用户（与groupId二选一）
-  "groupId": "uuid" | null // 绑定到群组（与userId二选一）
+  "userId": number | null, // 绑定到用户（与groupId二选一）
+  "groupId": number | null // 绑定到群组（与userId二选一）
 }
 ```
 
 **响应：**
 ```json
 {
-  "id": "uuid",
+  "id": 1,
   "deviceId": "ESP32_001",
   "name": "客厅显示屏",
-  "userId": "uuid" | null,
-  "groupId": "uuid" | null,
+  "userId": 1 | null,
+  "groupId": 1 | null,
   "status": "active",
   "createdAt": "2024-01-01T00:00:00Z"
 }
@@ -878,11 +1000,11 @@ data: {"type": "done"}
 {
   "devices": [
     {
-      "id": "uuid",
+      "id": 1,
       "deviceId": "ESP32_001",
       "name": "客厅显示屏",
-      "userId": "uuid" | null,
-      "groupId": "uuid" | null,
+      "userId": 1 | null,
+      "groupId": 1 | null,
       "groupName": "群组名称" | null,
       "status": "active",
       "createdAt": "2024-01-01T00:00:00Z"
@@ -905,9 +1027,10 @@ data: {"type": "done"}
 {
   "tasks": [
     {
-      "id": "uuid",
+      "id": 1,
       "title": "任务标题",
       "status": "pending",
+      "priority": "medium",
       "dueDate": "2024-01-01T15:00:00Z" | null,
       "createdAt": "2024-01-01T00:00:00Z"
     }
@@ -925,7 +1048,7 @@ data: {"type": "done"}
 解绑设备
 
 **路径参数：**
-- `id`: 设备 UUID
+- `id`: 设备 ID（数字）
 
 ### 9.8 认证中间件
 
@@ -964,9 +1087,19 @@ import { z } from "zod";
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional(),
-  groupId: z.string().uuid().nullable(),
-  assignedTo: z.string().uuid().nullable().optional(),
-  dueDate: z.string().datetime().optional(),
+  groupId: z.number().int().positive().nullable().optional(),
+  assignedTo: z.number().int().positive().nullable().optional(),
+  dueDate: z.string().datetime().nullable().optional(),
+  priority: z.enum(["high", "medium", "low"]).optional(),
+  isRecurring: z.boolean().optional(),
+  recurringRule: z.object({
+    type: z.enum(["daily", "weekly", "monthly", "yearly"]),
+    interval: z.number().int().positive(),
+    daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
+    endDate: z.string().optional(),
+    endAfterOccurrences: z.number().int().positive().optional(),
+  }).nullable().optional(),
 });
 
 // 在路由中使用
