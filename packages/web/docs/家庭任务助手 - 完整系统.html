@@ -1,0 +1,958 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家庭任务助手 - 完整系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.4s ease, color 0.4s ease; 
+        }
+        
+        /* 温馨风格 */
+        .sidebar {
+            background: #fef9f3;
+            box-shadow: 8px 0 16px rgba(232, 223, 213, 0.5);
+        }
+        
+        .dark .sidebar {
+            background: #2a2520;
+            box-shadow: 8px 0 16px rgba(26, 22, 18, 0.5);
+        }
+        
+        .card {
+            background: #fff;
+            box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.05);
+            border-radius: 1.5rem;
+            border: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .dark .card {
+            background: #2a2520;
+            box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .sidebar-item {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .sidebar-item:hover {
+            transform: translateX(4px);
+        }
+        
+        .sidebar-item.active {
+            background: rgba(245, 158, 11, 0.15);
+        }
+        
+        .dark .sidebar-item.active {
+            background: rgba(245, 158, 11, 0.2);
+        }
+        
+        .section-header {
+            background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .dark .section-header {
+            background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
+        }
+        
+        .section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+            margin-bottom: 1rem;
+        }
+        
+        /* 弹窗遮罩 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .modal-content {
+            background: #fff;
+            border-radius: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        
+        .dark .modal-content {
+            background: #2a2520;
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        
+        /* AI聊天气泡 */
+        .chat-message {
+            max-width: 70%;
+            padding: 1rem;
+            border-radius: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        
+        .chat-message.user {
+            background: #f59e0b;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
+        }
+        
+        .chat-message.assistant {
+            background: #e5e7eb;
+            color: #1f2937;
+            border-bottom-left-radius: 0.25rem;
+        }
+        
+        .dark .chat-message.assistant {
+            background: #374151;
+            color: #f3f4f6;
+        }
+        
+        /* 录音按钮动画 */
+        .recording-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* 隐藏class */
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-amber-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 flex">
+    
+    <!-- 侧边栏 -->
+    <aside class="sidebar w-80 min-h-screen p-6 flex flex-col">
+        <!-- Logo区域 -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold mb-1">🏠 家庭助手</h1>
+            <p class="text-sm opacity-60">完整版</p>
+        </div>
+        
+        <!-- 用户信息 -->
+        <div class="mb-8 p-4 rounded-2xl bg-white/50 dark:bg-black/20">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
+                    K
+                </div>
+                <div>
+                    <p class="font-semibold">Kai</p>
+                    <p class="text-xs opacity-60">React & Node.js工程师</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主题切换 -->
+        <div class="mb-6">
+            <button onclick="toggleTheme()" class="w-full px-4 py-2 rounded-xl bg-white/60 dark:bg-black/30 hover:bg-white dark:hover:bg-black/50 transition-all text-sm font-medium flex items-center justify-center gap-2">
+                <span>🌓</span>
+                <span>切换暗/亮模式</span>
+            </button>
+        </div>
+        
+        <!-- 导航菜单 -->
+        <nav class="flex-1 space-y-2 mb-6">
+            <div class="sidebar-item active px-4 py-3 rounded-xl" onclick="switchPage('today')">
+                <p class="font-semibold flex items-center gap-2">
+                    <span>📋</span>
+                    <span>今日任务</span>
+                </p>
+            </div>
+            <div class="sidebar-item px-4 py-3 rounded-xl hover:bg-white/50 dark:hover:bg-white/5" onclick="switchPage('week')">
+                <p class="font-medium flex items-center gap-2 opacity-70">
+                    <span>📅</span>
+                    <span>本周计划</span>
+                </p>
+            </div>
+            <div class="sidebar-item px-4 py-3 rounded-xl hover:bg-white/50 dark:hover:bg-white/5" onclick="switchPage('ai')">
+                <p class="font-medium flex items-center gap-2 opacity-70">
+                    <span>🤖</span>
+                    <span>AI助手</span>
+                </p>
+            </div>
+        </nav>
+        
+        <!-- 群组列表 -->
+        <div class="pt-6 border-t border-zinc-200 dark:border-zinc-700">
+            <div class="flex items-center justify-between mb-4">
+                <p class="section-title">我的群组</p>
+                <button onclick="openCreateGroupModal()" class="text-amber-500 hover:text-amber-600 text-sm font-medium">
+                    + 创建
+                </button>
+            </div>
+            <div class="space-y-3" id="groupList">
+                <!-- 默认群组 -->
+                <div class="flex items-center gap-3 cursor-pointer hover:opacity-100 transition-opacity bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border-2 border-amber-200 dark:border-amber-800">
+                    <div class="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-base">
+                        🏠
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-semibold">温馨小家</span>
+                            <span class="text-amber-500 text-base">⭐</span>
+                        </div>
+                        <p class="text-xs opacity-60">默认 · 4位成员</p>
+                    </div>
+                </div>
+                <!-- 其他群组 -->
+                <div class="flex items-center gap-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity p-2 rounded-lg hover:bg-white/30 dark:hover:bg-white/5">
+                    <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-base">
+                        ⛰️
+                    </div>
+                    <div class="flex-1">
+                        <span class="text-sm font-medium">登山俱乐部</span>
+                        <p class="text-xs opacity-60">12位成员</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    
+    <!-- 主内容区 -->
+    <main class="flex-1 overflow-y-auto">
+        <!-- 今日任务页面 -->
+        <div id="todayPage" class="page-content">
+            <!-- 顶部标题栏 -->
+            <div class="bg-white/60 dark:bg-zinc-900/60 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800 px-8 py-6 flex items-center justify-between">
+                <div>
+                    <h2 class="text-3xl font-light mb-1">早安，Kai 👋</h2>
+                    <p class="text-sm opacity-60">2026年1月25日，星期六 · 今天有 5 个任务等待处理</p>
+                </div>
+                <button onclick="openAddTaskModal()" class="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors shadow-lg flex items-center gap-2">
+                    <span class="text-xl">➕</span>
+                    <span>新建任务</span>
+                </button>
+            </div>
+            
+            <!-- 任务区域 - 上下堆叠 -->
+            <div class="p-8 space-y-10">
+                <!-- 个人任务区块 -->
+                <section>
+                    <div class="section-header">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-2xl font-semibold flex items-center gap-2">
+                                <span>👤</span>
+                                <span>个人任务</span>
+                            </h3>
+                            <span class="px-4 py-2 bg-white/50 dark:bg-black/30 rounded-full text-sm font-semibold">
+                                2 个任务
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="card p-6">
+                            <div class="flex items-start gap-4">
+                                <input type="checkbox" class="mt-1 w-5 h-5 rounded cursor-pointer flex-shrink-0">
+                                <div class="flex-1">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <h4 class="font-semibold text-lg">复习React Hooks</h4>
+                                        <span class="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold">
+                                            学习
+                                        </span>
+                                    </div>
+                                    <p class="text-sm opacity-70 mb-3">整理useCallback和useMemo的使用场景</p>
+                                    <div class="flex items-center gap-3 text-xs opacity-50">
+                                        <span>⏰ 14:00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-6">
+                            <div class="flex items-start gap-4">
+                                <input type="checkbox" class="mt-1 w-5 h-5 rounded cursor-pointer flex-shrink-0">
+                                <div class="flex-1">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <h4 class="font-semibold text-lg">晚间瑜伽</h4>
+                                        <span class="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold">
+                                            健康
+                                        </span>
+                                    </div>
+                                    <p class="text-sm opacity-70 mb-3">30分钟放松运动</p>
+                                    <div class="flex items-center gap-3 text-xs opacity-50">
+                                        <span>⏰ 21:00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- 家庭任务区块 -->
+                <section>
+                    <div class="section-header">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-2xl font-semibold flex items-center gap-2 mb-1">
+                                    <span>🏠</span>
+                                    <span>家庭任务</span>
+                                </h3>
+                                <p class="text-sm opacity-60 flex items-center gap-2">
+                                    <span>来自群组：温馨小家</span>
+                                    <span class="text-amber-500">⭐</span>
+                                </p>
+                            </div>
+                            <span class="px-4 py-2 bg-white/50 dark:bg-black/30 rounded-full text-sm font-semibold">
+                                3 个任务
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="card p-6">
+                            <div class="flex items-start gap-4">
+                                <input type="checkbox" class="mt-1 w-5 h-5 rounded cursor-pointer flex-shrink-0">
+                                <div class="flex-1">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <h4 class="font-semibold text-lg">给客厅植物浇水</h4>
+                                        <span class="px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold">
+                                            家务
+                                        </span>
+                                    </div>
+                                    <p class="text-sm opacity-70 mb-3">记得龟背竹需要喷雾保湿</p>
+                                    <div class="flex items-center gap-3 text-xs opacity-50">
+                                        <span>⏰ 09:00</span>
+                                        <span>•</span>
+                                        <span>AI创建</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-6 border-l-4 border-red-400">
+                            <div class="flex items-start gap-4">
+                                <input type="checkbox" class="mt-1 w-5 h-5 rounded cursor-pointer flex-shrink-0">
+                                <div class="flex-1">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <h4 class="font-semibold text-lg">取干洗衣物</h4>
+                                        <span class="px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold">
+                                            紧急
+                                        </span>
+                                    </div>
+                                    <p class="text-sm opacity-70 mb-3">取衣单在冰箱磁贴上</p>
+                                    <div class="flex items-center gap-3 text-xs opacity-50">
+                                        <span>⏰ 17:30前</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-6">
+                            <div class="flex items-start gap-4">
+                                <input type="checkbox" class="mt-1 w-5 h-5 rounded cursor-pointer flex-shrink-0">
+                                <div class="flex-1">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <h4 class="font-semibold text-lg">采购日用品</h4>
+                                        <span class="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold">
+                                            购物
+                                        </span>
+                                    </div>
+                                    <p class="text-sm opacity-70 mb-3">牛奶、面包、水果</p>
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3 text-xs opacity-50">
+                                            <span>⏰ 下午</span>
+                                        </div>
+                                        <div class="flex -space-x-2">
+                                            <div class="w-7 h-7 rounded-full bg-amber-400 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs font-bold text-white">K</div>
+                                            <div class="w-7 h-7 rounded-full bg-blue-400 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs font-bold text-white">M</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- 本周计划页面 -->
+        <div id="weekPage" class="page-content hidden">
+            <div class="bg-white/60 dark:bg-zinc-900/60 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800 px-8 py-6 flex items-center justify-between">
+                <div>
+                    <h2 class="text-3xl font-light mb-1">本周计划 📅</h2>
+                    <p class="text-sm opacity-60">1月25日 - 1月31日 · 共12个任务</p>
+                </div>
+                <button onclick="openAddTaskModal()" class="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors shadow-lg flex items-center gap-2">
+                    <span class="text-xl">➕</span>
+                    <span>新建任务</span>
+                </button>
+            </div>
+            
+            <div class="p-8">
+                <!-- 时间线样式展示 -->
+                <div class="space-y-8">
+                    <!-- 周一 -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center font-bold">
+                                周一
+                            </div>
+                            <div>
+                                <p class="font-semibold">1月26日</p>
+                                <p class="text-xs opacity-60">2个任务</p>
+                            </div>
+                        </div>
+                        <div class="ml-16 space-y-3">
+                            <div class="card p-5 flex items-center justify-between">
+                                <div class="flex items-center gap-4">
+                                    <input type="checkbox" class="w-5 h-5 rounded cursor-pointer">
+                                    <div>
+                                        <p class="font-semibold">团队周会</p>
+                                        <p class="text-sm opacity-60">10:00 AM · 个人任务</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold">工作</span>
+                            </div>
+                            <div class="card p-5 flex items-center justify-between">
+                                <div class="flex items-center gap-4">
+                                    <input type="checkbox" class="w-5 h-5 rounded cursor-pointer">
+                                    <div>
+                                        <p class="font-semibold">晚餐采购</p>
+                                        <p class="text-sm opacity-60">18:00 · 温馨小家 ⭐</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold">购物</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 周三 -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center font-bold">
+                                周三
+                            </div>
+                            <div>
+                                <p class="font-semibold">1月28日</p>
+                                <p class="text-xs opacity-60">3个任务</p>
+                            </div>
+                        </div>
+                        <div class="ml-16 space-y-3">
+                            <div class="card p-5 flex items-center justify-between border-l-4 border-amber-400">
+                                <div class="flex items-center gap-4">
+                                    <input type="checkbox" class="w-5 h-5 rounded cursor-pointer">
+                                    <div>
+                                        <p class="font-semibold">月度大采购</p>
+                                        <p class="text-sm opacity-60">下午 · 温馨小家 ⭐</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold">购物</span>
+                                    <div class="flex -space-x-2">
+                                        <div class="w-7 h-7 rounded-full bg-amber-400 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs font-bold text-white">K</div>
+                                        <div class="w-7 h-7 rounded-full bg-blue-400 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs font-bold text-white">J</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 周五 -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center font-bold">
+                                周五
+                            </div>
+                            <div>
+                                <p class="font-semibold">1月30日</p>
+                                <p class="text-xs opacity-60">2个任务</p>
+                            </div>
+                        </div>
+                        <div class="ml-16 space-y-3">
+                            <div class="card p-5 flex items-center justify-between">
+                                <div class="flex items-center gap-4">
+                                    <input type="checkbox" class="w-5 h-5 rounded cursor-pointer">
+                                    <div>
+                                        <p class="font-semibold">汽车保养（换机油）</p>
+                                        <p class="text-sm opacity-60">温馨小家 ⭐</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full text-xs font-medium">待预约</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 周日 -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center font-bold">
+                                周日
+                            </div>
+                            <div>
+                                <p class="font-semibold">2月1日</p>
+                                <p class="text-xs opacity-60">1个任务</p>
+                            </div>
+                        </div>
+                        <div class="ml-16 space-y-3">
+                            <div class="card p-5 flex items-center justify-between border-l-4 border-green-400">
+                                <div class="flex items-center gap-4">
+                                    <input type="checkbox" class="w-5 h-5 rounded cursor-pointer">
+                                    <div>
+                                        <p class="font-semibold">家庭聚餐</p>
+                                        <p class="text-sm opacity-60">12:00 PM · 温馨小家 ⭐</p>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full text-xs font-medium">已确认</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI助手页面 -->
+        <div id="aiPage" class="page-content hidden">
+            <div class="bg-white/60 dark:bg-zinc-900/60 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800 px-8 py-6">
+                <h2 class="text-3xl font-light mb-1">AI助手 🤖</h2>
+                <p class="text-sm opacity-60">通过语音或文字与AI对话，快速创建和管理任务</p>
+            </div>
+            
+            <div class="flex flex-col h-[calc(100vh-120px)]">
+                <!-- 聊天历史区域 -->
+                <div class="flex-1 overflow-y-auto p-8" id="chatHistory">
+                    <!-- 欢迎消息 -->
+                    <div class="chat-message assistant">
+                        <p class="text-sm mb-2 opacity-60">AI助手</p>
+                        <p>你好！我是你的AI助手。你可以通过语音或文字告诉我你的需求，比如：</p>
+                        <ul class="mt-2 text-sm opacity-80 list-disc list-inside">
+                            <li>"明天下午3点提醒我开家长会"</li>
+                            <li>"给我看看今天的任务"</li>
+                            <li>"帮我创建一个购物清单"</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 示例对话 -->
+                    <div class="chat-message user">
+                        <p class="text-sm mb-2 opacity-80">你</p>
+                        <p>明天下午三点提醒我开家长会</p>
+                    </div>
+                    
+                    <div class="chat-message assistant">
+                        <p class="text-sm mb-2 opacity-60">AI助手</p>
+                        <p class="mb-3">好的，我为你创建了以下任务：</p>
+                        <div class="bg-white dark:bg-zinc-800 p-4 rounded-xl">
+                            <div class="flex items-start justify-between mb-2">
+                                <h4 class="font-semibold">开家长会</h4>
+                                <span class="px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold">个人</span>
+                            </div>
+                            <p class="text-sm opacity-70 mb-2">📅 明天 15:00</p>
+                            <p class="text-sm opacity-70">🔔 提前30分钟提醒</p>
+                        </div>
+                        <p class="mt-3 text-sm">任务已添加到你的列表中。</p>
+                    </div>
+                </div>
+                
+                <!-- 输入区域 -->
+                <div class="border-t border-zinc-200 dark:border-zinc-800 p-6 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-sm">
+                    <div class="flex items-center gap-3">
+                        <!-- 录音按钮 -->
+                        <button id="recordBtn" onclick="toggleRecording()" class="w-12 h-12 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center text-xl transition-all">
+                            🎤
+                        </button>
+                        
+                        <!-- 文本输入 -->
+                        <input type="text" id="chatInput" placeholder="输入消息或长按麦克风说话..." class="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        
+                        <!-- 发送按钮 -->
+                        <button onclick="sendMessage()" class="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors">
+                            发送
+                        </button>
+                    </div>
+                    <p class="text-xs opacity-50 mt-2 text-center" id="recordingStatus"></p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 新建任务弹窗 -->
+    <div id="addTaskModal" class="modal-overlay">
+        <div class="modal-content p-8">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold">新建任务</h3>
+                <button onclick="closeAddTaskModal()" class="text-2xl opacity-50 hover:opacity-100">×</button>
+            </div>
+            
+            <form class="space-y-4">
+                <!-- 任务类型选择 -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">任务类型</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="card p-4 cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="taskType" value="personal" checked onchange="toggleGroupSelect()" class="mr-2">
+                            <span class="font-semibold">👤 个人任务</span>
+                        </label>
+                        <label class="card p-4 cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="taskType" value="group" onchange="toggleGroupSelect()" class="mr-2">
+                            <span class="font-semibold">🏠 家庭任务</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- 群组选择（仅家庭任务时显示） -->
+                <div id="groupSelectDiv" class="hidden">
+                    <label class="block text-sm font-medium mb-2">选择群组</label>
+                    <select class="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="1">🏠 温馨小家 (默认)</option>
+                        <option value="2">⛰️ 登山俱乐部</option>
+                    </select>
+                </div>
+                
+                <!-- 任务标题 -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">任务标题</label>
+                    <input type="text" placeholder="例如：采购日用品" class="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                
+                <!-- 任务描述 -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">任务描述（可选）</label>
+                    <textarea rows="3" placeholder="牛奶、面包、水果..." class="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+                </div>
+                
+                <!-- 截止时间 -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">截止时间（可选）</label>
+                    <input type="datetime-local" class="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                
+                <!-- 分类标签 -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">分类标签</label>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold cursor-pointer">
+                            <input type="radio" name="category" value="house" class="mr-1">家务
+                        </label>
+                        <label class="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold cursor-pointer">
+                            <input type="radio" name="category" value="shopping" class="mr-1">购物
+                        </label>
+                        <label class="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold cursor-pointer">
+                            <input type="radio" name="category" value="work" class="mr-1">工作
+                        </label>
+                        <label class="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold cursor-pointer">
+                            <input type="radio" name="category" value="health" class="mr-1">健康
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- 操作按钮 -->
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeAddTaskModal()" class="flex-1 px-6 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                        取消
+                    </button>
+                    <button type="submit" class="flex-1 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors">
+                        创建任务
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 新建群组弹窗 -->
+    <div id="createGroupModal" class="modal-overlay">
+        <div class="modal-content p-8">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold">创建新群组</h3>
+                <button onclick="closeCreateGroupModal()" class="text-2xl opacity-50 hover:opacity-100">×</button>
+            </div>
+            
+            <form class="space-y-4" onsubmit="createGroup(event)">
+                <!-- 群组名称 -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">群组名称</label>
+                    <input type="text" id="groupName" placeholder="例如：温馨小家" class="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-500" required>
+                </div>
+                
+                <!-- 群组图标 -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">选择图标</label>
+                    <div class="grid grid-cols-6 gap-2">
+                        <label class="card p-3 text-2xl text-center cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="groupIcon" value="🏠" checked class="hidden">
+                            🏠
+                        </label>
+                        <label class="card p-3 text-2xl text-center cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="groupIcon" value="👨‍👩‍👧‍👦" class="hidden">
+                            👨‍👩‍👧‍👦
+                        </label>
+                        <label class="card p-3 text-2xl text-center cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="groupIcon" value="⛰️" class="hidden">
+                            ⛰️
+                        </label>
+                        <label class="card p-3 text-2xl text-center cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="groupIcon" value="🎮" class="hidden">
+                            🎮
+                        </label>
+                        <label class="card p-3 text-2xl text-center cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="groupIcon" value="📚" class="hidden">
+                            📚
+                        </label>
+                        <label class="card p-3 text-2xl text-center cursor-pointer hover:shadow-lg transition-shadow">
+                            <input type="radio" name="groupIcon" value="💼" class="hidden">
+                            💼
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- 邀请码显示（创建后显示） -->
+                <div id="inviteCodeSection" class="hidden">
+                    <div class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border-2 border-amber-200 dark:border-amber-800">
+                        <p class="text-sm font-medium mb-2">群组邀请码</p>
+                        <div class="flex items-center gap-2">
+                            <code id="inviteCodeDisplay" class="flex-1 text-2xl font-bold text-amber-600 dark:text-amber-400 tracking-widest">8859</code>
+                            <button type="button" onclick="copyInviteCode()" class="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm hover:bg-amber-600 transition-colors">
+                                复制
+                            </button>
+                        </div>
+                        <p class="text-xs opacity-60 mt-2">分享此邀请码给家人，他们可以通过输入邀请码加入群组</p>
+                    </div>
+                </div>
+                
+                <!-- 操作按钮 -->
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeCreateGroupModal()" class="flex-1 px-6 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                        取消
+                    </button>
+                    <button type="submit" id="createGroupBtn" class="flex-1 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-colors">
+                        创建群组
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 页面切换
+        function switchPage(page) {
+            document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
+            
+            if (page === 'today') {
+                document.getElementById('todayPage').classList.remove('hidden');
+                document.querySelectorAll('.sidebar-item')[0].classList.add('active');
+            } else if (page === 'week') {
+                document.getElementById('weekPage').classList.remove('hidden');
+                document.querySelectorAll('.sidebar-item')[1].classList.add('active');
+            } else if (page === 'ai') {
+                document.getElementById('aiPage').classList.remove('hidden');
+                document.querySelectorAll('.sidebar-item')[2].classList.add('active');
+            }
+        }
+        
+        // 主题切换
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+        }
+        
+        // 打开新建任务弹窗
+        function openAddTaskModal() {
+            document.getElementById('addTaskModal').classList.add('active');
+        }
+        
+        // 关闭新建任务弹窗
+        function closeAddTaskModal() {
+            document.getElementById('addTaskModal').classList.remove('active');
+        }
+        
+        // 切换群组选择显示
+        function toggleGroupSelect() {
+            const groupType = document.querySelector('input[name="taskType"]:checked').value;
+            const groupSelectDiv = document.getElementById('groupSelectDiv');
+            if (groupType === 'group') {
+                groupSelectDiv.classList.remove('hidden');
+            } else {
+                groupSelectDiv.classList.add('hidden');
+            }
+        }
+        
+        // 打开创建群组弹窗
+        function openCreateGroupModal() {
+            document.getElementById('createGroupModal').classList.add('active');
+            document.getElementById('inviteCodeSection').classList.add('hidden');
+        }
+        
+        // 关闭创建群组弹窗
+        function closeCreateGroupModal() {
+            document.getElementById('createGroupModal').classList.remove('active');
+        }
+        
+        // 创建群组
+        function createGroup(event) {
+            event.preventDefault();
+            
+            // 生成随机邀请码
+            const inviteCode = Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('inviteCodeDisplay').textContent = inviteCode;
+            
+            // 显示邀请码区域
+            document.getElementById('inviteCodeSection').classList.remove('hidden');
+            
+            // 修改按钮文字
+            document.getElementById('createGroupBtn').textContent = '完成';
+            document.getElementById('createGroupBtn').onclick = closeCreateGroupModal;
+            
+            alert('群组创建成功！邀请码：' + inviteCode);
+        }
+        
+        // 复制邀请码
+        function copyInviteCode() {
+            const code = document.getElementById('inviteCodeDisplay').textContent;
+            navigator.clipboard.writeText(code);
+            alert('邀请码已复制：' + code);
+        }
+        
+        // AI助手相关功能
+        let isRecording = false;
+        let recordingTimer = null;
+        let recordingSeconds = 0;
+        
+        function toggleRecording() {
+            const btn = document.getElementById('recordBtn');
+            const status = document.getElementById('recordingStatus');
+            
+            if (!isRecording) {
+                // 开始录音
+                isRecording = true;
+                recordingSeconds = 0;
+                btn.classList.add('recording-pulse');
+                btn.style.background = '#ef4444';
+                
+                recordingTimer = setInterval(() => {
+                    recordingSeconds++;
+                    const minutes = Math.floor(recordingSeconds / 60);
+                    const seconds = recordingSeconds % 60;
+                    status.textContent = `录音中... ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} / 01:00`;
+                    
+                    if (recordingSeconds >= 60) {
+                        toggleRecording(); // 自动停止
+                    }
+                }, 1000);
+            } else {
+                // 停止录音
+                isRecording = false;
+                clearInterval(recordingTimer);
+                btn.classList.remove('recording-pulse');
+                btn.style.background = '';
+                status.textContent = '正在识别...';
+                
+                // 模拟识别过程
+                setTimeout(() => {
+                    status.textContent = '';
+                    alert('语音识别完成：明天下午三点提醒我开家长会');
+                }, 1500);
+            }
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            const chatHistory = document.getElementById('chatHistory');
+            
+            // 添加用户消息
+            const userMsg = document.createElement('div');
+            userMsg.className = 'chat-message user';
+            userMsg.innerHTML = `
+                <p class="text-sm mb-2 opacity-80">你</p>
+                <p>${message}</p>
+            `;
+            chatHistory.appendChild(userMsg);
+            
+            // 清空输入框
+            input.value = '';
+            
+            // 模拟AI回复
+            setTimeout(() => {
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'chat-message assistant';
+                aiMsg.innerHTML = `
+                    <p class="text-sm mb-2 opacity-60">AI助手</p>
+                    <p>好的，我已经收到你的请求。正在为你处理...</p>
+                `;
+                chatHistory.appendChild(aiMsg);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }, 500);
+        }
+        
+        // 回车发送消息
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendMessage();
+                    }
+                });
+            }
+        });
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

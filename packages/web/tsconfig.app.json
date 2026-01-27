@@ -1,0 +1,52 @@
+// 应用代码配置：浏览器环境（DOM、React）、编译目标：包含所有 src/ 下的文件
+{
+  "compilerOptions": {
+    // 缓存 ts 编译信息的文件位置，便于增量编译
+    // 缓存的是当前配置文件中，include属性配置的目录下的文件，这里就是src/ 目录下的所有 .ts 和 .tsx 文件的编译信息
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+
+    // 目标 JavaScript 版本，选择支持较新的语法（ES2022）
+    "target": "ES2022",
+
+    // 在类字段初始化时，使用 `useDefineForClassFields` 更符合未来标准（class fields）
+    "useDefineForClassFields": true,
+
+    // 编译时采用的库文件，提供 ES2022 及 DOM API（适合现代浏览器）
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    // 模块系统，选择 ESNext ，支持动态导入和最新模块语法
+    "module": "ESNext",
+
+    // 包含 Vite 客户端的一些类型定义（如果你用到代码中 referance vite/api）
+    "types": ["vite/client"],
+
+    // 跳过库文件的类型检查，加快编译，推荐在开发环境中启用
+    "skipLibCheck": true,
+
+    /* Bundler 模式相关配置：
+       这些是针对使用现代打包工具（如 Vite）优化的配置，减少兼容性问题 */
+    "moduleResolution": "bundler", // 模块解析方式，适合现代打包工具
+    "allowImportingTsExtensions": true, // 允许导入带.ts后缀的模块
+    "verbatimModuleSyntax": true, // 保持模块语法原样（支持 ES Module）
+    "moduleDetection": "force", // 强制检测模块文件
+    "noEmit": true, // 不输出编译后文件（只做类型检查，Vite自己处理输出）
+    "jsx": "react-jsx", // 使用 React 17+ 推荐的 JSX 转换方式
+
+    // 基础路径配置，用于解析路径别名（shadcn CLI 需要）
+    "baseUrl": ".",
+
+    // 路径别名配置，允许用 `@/` 代表 `src/`
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    // 代码质量/严格提示相关配置
+    "strict": true, // 启用所有严格类型检查选项
+    "noUnusedLocals": true, // 不允许未使用的局部变量
+    "noUnusedParameters": true, // 不允许未使用的参数
+    // "erasableSyntaxOnly": true, // 已禁用：与 api 项目的代码风格不兼容（api 使用 enum 等语法）
+    "noFallthroughCasesInSwitch": true, // 禁止 switch 语句中漏写break/return，避免逻辑错误
+    "noUncheckedSideEffectImports": true // 避免副作用导入被忽略，确保导入的库正确运行
+  },
+  "include": ["src"], // 指定只对 src 目录下的文件进行类型检查
+}

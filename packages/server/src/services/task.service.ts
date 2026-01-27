@@ -1,85 +1,17 @@
 import { eq, and, or, isNull, inArray, desc, asc, count } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { tasks, groupUsers, users, groups } from "../db/schema";
-
-export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
-export type TaskSource = "ai" | "human";
-export type Priority = "high" | "medium" | "low";
-
-export type RecurringRule = {
-  type: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  interval: number; // 间隔（如每2周 = interval: 2）
-  daysOfWeek?: number[]; // 周几（0=周日, 1=周一...6=周六）仅weekly使用
-  dayOfMonth?: number; // 每月几号（1-31）仅monthly使用
-  endDate?: string; // 结束日期（可选，如 '2026-12-31'）
-  endAfterOccurrences?: number; // 或指定生成N次后结束
-};
-
-export interface CreateTaskInput {
-  title: string;
-  description?: string;
-  groupId?: number | null;
-  assignedTo?: number | null;
-  dueDate?: Date | null;
-  source?: TaskSource;
-  priority?: Priority;
-  isRecurring?: boolean;
-  recurringRule?: RecurringRule;
-}
-
-export interface UpdateTaskInput {
-  title?: string;
-  description?: string;
-  assignedTo?: number | null;
-  dueDate?: Date | null;
-  priority?: Priority;
-  isRecurring?: boolean;
-  recurringRule?: RecurringRule | null;
-}
-
-export interface TaskFilters {
-  status?: TaskStatus;
-  groupId?: number;
-  assignedTo?: number | "me";
-  priority?: Priority;
-  excludeRecurringInstances?: boolean; // 是否排除重复任务的子实例
-  page?: number;
-  limit?: number;
-}
-
-export interface TaskInfo {
-  id: number;
-  title: string;
-  description: string | null;
-  status: TaskStatus;
-  priority: Priority;
-  groupId: number | null;
-  groupName: string | null;
-  createdBy: number;
-  createdByName: string | null;
-  assignedTo: number | null;
-  assignedToName: string | null;
-  completedBy: number | null;
-  completedByName: string | null;
-  completedAt: Date | null;
-  dueDate: Date | null;
-  source: TaskSource;
-  isRecurring: boolean;
-  recurringRule: RecurringRule | null;
-  recurringParentId: number | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface TaskListResult {
-  tasks: TaskInfo[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
+import type {
+  TaskStatus,
+  TaskSource,
+  Priority,
+  RecurringRule,
+  CreateTaskInput,
+  UpdateTaskInput,
+  TaskFilters,
+  TaskInfo,
+  TaskListResult,
+} from "shared";
 
 /**
  * 任务Service层

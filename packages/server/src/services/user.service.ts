@@ -1,33 +1,11 @@
 import { eq, and } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { users, groupUsers, groups } from "../db/schema";
-
-export interface UpdateUserInput {
-  nickname?: string;
-  avatar?: string;
-  defaultGroupId?: number | null;
-}
-
-export interface UserInfo {
-  id: number;
-  email: string;
-  nickname: string | null;
-  avatar: string | null;
-  role: string;
-  defaultGroupId: number | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface UserGroup {
-  id: number;
-  name: string;
-  inviteCode: string;
-  avatar: string | null;
-  role: string; // owner | member
-  joinedAt: Date;
-  createdAt: Date;
-}
+import type {
+  UpdateUserInput,
+  UserInfo,
+  UserGroup,
+} from "shared";
 
 /**
  * 用户Service层

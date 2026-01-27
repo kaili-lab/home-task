@@ -1,0 +1,40 @@
+{
+  // Node.js 配置：专门为 Node.js 环境编写的配置，用于检查 vite.config.ts 等文件
+  "compilerOptions": {
+    // 缓存 TS 编译信息的文件位置，用于增量编译加快速度
+    // 缓存的是当前配置文件中，include属性配置的目录下的文件，这里就是 vite.config.ts
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+
+    // 输出的目标 JavaScript 版本，支持 ES2023 最新特性
+    "target": "ES2023",
+
+    // 包含所有 ES2023 的标准API（Promise.allSettled, Array.findLast, etc.）
+    "lib": ["ES2023"],
+
+    // 使用模块系统为 ESNext（最新ESM的模块语法和特性）
+    "module": "ESNext",
+
+    // 包含 Node.js 类型定义，允许使用 Node.js 核心模块和类型
+    "types": ["node"],
+
+    // 跳过库文件的类型检查（加快编译），在开发时建议开启
+    "skipLibCheck": true,
+
+    /* Bundler mode 配置，支持现代打包工具 */
+    "moduleResolution": "bundler", // 模块解析方式，优化用于现代打包工具（如 Vite）
+    "allowImportingTsExtensions": true, // 允许导入带 `.ts` 扩展名的文件
+    "verbatimModuleSyntax": true, // 保持模块语法原样（支持 ESM）
+    "moduleDetection": "force", // 强制检测模块
+    "noEmit": true, // 不输出编译后的文件（只做类型检查，Vite 处理输出）
+
+    /* 代码质量和严格检查 */
+    "strict": true, // 启用所有严格类型检查
+    "noUnusedLocals": true, // 不允许未使用的局部变量
+    "noUnusedParameters": true, // 不允许未使用的参数
+    "erasableSyntaxOnly": true, // 这是实验性特性，建议只在特殊场景使用
+    "noFallthroughCasesInSwitch": true, // 切换语句中强制 break/return，避免逻辑错误
+    "noUncheckedSideEffectImports": true // 导入副作用必须明确，否则报错
+  },
+  // 只检查 vite.config.ts 文件
+  "include": ["vite.config.ts"]
+}

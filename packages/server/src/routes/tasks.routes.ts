@@ -3,7 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthenticatedVariables } from "../types/variables";
 import type { Bindings } from "../types/bindings";
-import { TaskService, type TaskStatus, type Priority } from "../services/task.service";
+import { TaskService } from "../services/task.service";
+import type { TaskStatus, Priority } from "shared";
 import { getUserId, successResponse } from "../utils/route-helpers";
 import { handleServiceError } from "../utils/error-handler";
 

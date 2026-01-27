@@ -1,34 +1,12 @@
 import { eq, and } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { groups, groupUsers, users } from "../db/schema";
-
-export interface CreateGroupInput {
-  name: string;
-  avatar?: string;
-}
-
-export interface UpdateGroupInput {
-  name?: string;
-  avatar?: string;
-}
-
-export interface GroupInfo {
-  id: number;
-  name: string;
-  inviteCode: string;
-  avatar: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface GroupDetail extends GroupInfo {
-  members: Array<{
-    userId: number;
-    nickname: string | null;
-    role: string;
-    joinedAt: Date;
-  }>;
-}
+import type {
+  CreateGroupInput,
+  UpdateGroupInput,
+  GroupInfo,
+  GroupDetail,
+} from "shared";
 
 /**
  * 生成唯一邀请码（4-6位数字）

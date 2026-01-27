@@ -8,26 +8,14 @@ import {
   chatCompletionStream,
   type ChatMessage,
 } from "../utils/openai-client";
-import { TaskService, type CreateTaskInput } from "./task.service";
+import { TaskService } from "./task.service";
+import type { CreateTaskInput } from "shared";
 import { z } from "zod";
-
-export interface MessageInput {
-  role: "user" | "assistant" | "system";
-  content: string;
-  type?: "text" | "task_summary" | "question";
-  payload?: Record<string, unknown>;
-}
-
-export interface AIChatInput {
-  message: string;
-  audioUrl?: string;
-}
-
-export interface AIChatResponse {
-  content: string;
-  taskId?: number;
-  task?: unknown;
-}
+import type {
+  MessageInput,
+  AIChatInput,
+  AIChatResponse,
+} from "shared";
 
 /**
  * AI Service层

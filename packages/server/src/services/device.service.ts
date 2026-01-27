@@ -1,33 +1,11 @@
 import { eq, and, or, isNull, inArray } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { devices, tasks, groupUsers, groups } from "../db/schema";
-
-export interface CreateDeviceInput {
-  deviceId: string;
-  name: string;
-  userId?: number | null;
-  groupId?: number | null;
-}
-
-export interface DeviceInfo {
-  id: number;
-  deviceId: string;
-  name: string;
-  userId: number | null;
-  groupId: number | null;
-  groupName: string | null;
-  status: string;
-  createdAt: Date;
-}
-
-export interface DeviceTask {
-  id: number;
-  title: string;
-  status: string;
-  priority: string;
-  dueDate: Date | null;
-  createdAt: Date;
-}
+import type {
+  CreateDeviceInput,
+  DeviceInfo,
+  DeviceTask,
+} from "shared";
 
 /**
  * 设备Service层

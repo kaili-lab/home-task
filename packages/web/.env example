@@ -1,0 +1,5 @@
+# 后端 API 基础地址
+VITE_API_BASE_URL=http://localhost:3000
+
+# Better Auth 后端地址（通常与 API 地址相同）
+VITE_AUTH_BASE_URL=http://localhost:3000
