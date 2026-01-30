@@ -1,11 +1,30 @@
-import { pgTable, serial, varchar, text, timestamp, boolean, integer, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  varchar,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  jsonb,
+  pgEnum,
+  time,
+  date,
+  unique,
+} from "drizzle-orm/pg-core";
+import { RecurringRule } from "shared";
 import { relations } from "drizzle-orm";
 
 // ==================== 枚举定义 ====================
 // 注意：所有枚举必须在表定义之前声明
 
 // 任务状态枚举
-export const taskStatusEnum = pgEnum("task_status", ["pending", "in_progress", "completed", "cancelled"]);
+export const taskStatusEnum = pgEnum("task_status", [
+  "pending",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
 
 // 任务来源枚举
 export const taskSourceEnum = pgEnum("task_source", ["ai", "human"]);
@@ -30,7 +49,7 @@ export const users = pgTable("user", {
   image: varchar("image", { length: 500 }), // Better Auth映射为avatarUrl
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-  
+
   // 业务字段
   phone: varchar("phone", { length: 20 }),
   nickname: varchar("nickname", { length: 50 }),
@@ -88,65 +107,93 @@ export const groups = pgTable("groups", {
 });
 
 // 群组成员关联表
-export const groupUsers = pgTable("group_users", {
-  id: serial("id").primaryKey(),
-  groupId: integer("groupId")
-    .notNull()
-    .references(() => groups.id, { onDelete: "cascade" }),
-  userId: integer("userId")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  role: varchar("role", { length: 20 }).notNull().default("member"), // owner (群主) / member (成员)
-  status: varchar("status", { length: 20 }).notNull().default("active"), // active (已加入) / pending (邀请中)
-  joinedAt: timestamp("joinedAt").notNull().defaultNow(),
-}, (table) => ({
-  // 唯一约束：(groupId, userId) 必须唯一，防止重复加群
-  uniqueGroupUser: {
-    columns: [table.groupId, table.userId],
+export const groupUsers = pgTable(
+  "group_users",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("groupId")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).notNull().default("member"), // owner (群主) / member (成员)
+    status: varchar("status", { length: 20 }).notNull().default("active"), // active (已加入) / pending (邀请中)
+    joinedAt: timestamp("joinedAt").notNull().defaultNow(),
   },
-}));
+  (table) => ({
+    // 唯一约束：(groupId, userId) 必须唯一，防止重复加群
+    uniqueGroupUser: unique("unique_group_user").on(table.groupId, table.userId),
+  }),
+);
 
 // 任务表
 export const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
-  title: varchar("title", { length: 200 }).notNull(), // 任务内容
-  description: text("description"), // 任务详情
-  status: taskStatusEnum("status").notNull().default("pending"), // pending / completed / cancelled
-  priority: priorityEnum("priority").notNull().default("medium"), // 优先级
-  
+
+  // 基本信息
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description"),
+  status: taskStatusEnum("status").notNull().default("pending"), // pending/completed/cancelled/template
+  priority: priorityEnum("priority").notNull().default("medium"),
+
+  // 时间字段（startTime/endTime 为 NULL = 全天任务）
+  dueDate: date("dueDate"), // 模板任务可以为 NULL
+  startTime: time("startTime"), // NULL = 全天任务
+  endTime: time("endTime"), // 时间跨度不超过1年
+
   // 归属逻辑
-  groupId: integer("groupId").references(() => groups.id, { onDelete: "cascade" }), // NULL = 个人私有任务; 有值 = 群组公开任务
+  groupId: integer("groupId").references(() => groups.id, { onDelete: "cascade" }),
   createdBy: integer("createdBy")
     .notNull()
-    .references(() => users.id, { onDelete: "cascade" }), // [FK] 创建人
-  source: taskSourceEnum("source").notNull().default("human"), // ai/human
-  assignedTo: integer("assignedTo").references(() => users.id, { onDelete: "set null" }), // [FK] 分配给谁（NULL = 未分配或分配给创建者）
-  
+    .references(() => users.id, { onDelete: "cascade" }),
+  source: taskSourceEnum("source").notNull().default("human"),
+
   // 完成逻辑
-  completedBy: integer("completedBy").references(() => users.id, { onDelete: "set null" }), // [FK] 记录是谁完成的
+  completedBy: integer("completedBy").references(() => users.id, { onDelete: "set null" }),
   completedAt: timestamp("completedAt"),
-  
+
   // 重复任务逻辑
-  isRecurring: boolean("isRecurring").notNull().default(false), // 是否为重复任务
-  recurringRule: jsonb("recurringRule"), // 重复规则（JSON格式）
-  recurringParentId: integer("recurringParentId").references((): any => tasks.id, { onDelete: "set null" }), // 如果是由重复任务生成的实例，指向父任务
-  
-  // 辅助字段
-  dueDate: timestamp("dueDate"), // 截止时间
+  isRecurring: boolean("isRecurring").notNull().default(false),
+  recurringRule: jsonb("recurringRule").$type<RecurringRule>(),
+  recurringParentId: integer("recurringParentId").references((): any => tasks.id, {
+    onDelete: "cascade", // 模板删除时，级联删除所有实例
+  }),
+
+  // 时间戳
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
+
+// 任务分配表（支持多用户分配）
+export const taskAssignments = pgTable(
+  "task_assignments",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("taskId")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    // 唯一约束：同一任务不能重复分配给同一用户
+    uniqueTaskUser: unique("unique_task_user").on(table.taskId, table.userId),
+  }),
+);
 
 // 设备表
 export const devices = pgTable("devices", {
   id: serial("id").primaryKey(),
   deviceId: varchar("deviceId", { length: 100 }).notNull().unique(), // 硬件唯一标识
   name: varchar("name", { length: 50 }).notNull(),
-  
+
   // 互斥绑定逻辑 (业务层控制二选一)
   userId: integer("userId").references(() => users.id, { onDelete: "cascade" }), // [FK] 绑定个人 -> 显示: 个人私有 + 该人所在所有群组
   groupId: integer("groupId").references(() => groups.id, { onDelete: "cascade" }), // [FK] 绑定群组 -> 显示: 仅该群组公开任务
-  
+
   status: varchar("status", { length: 20 }).notNull().default("active"), // active / inactive
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
@@ -157,14 +204,14 @@ export const messages = pgTable("messages", {
   userId: integer("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }), // [FK] 属于哪个用户
-  
+
   role: messageRoleEnum("role").notNull(), // user / assistant / system
   content: text("content").notNull(), // 文本内容 (用于搜索和降级展示)
-  
+
   // UI 渲染核心
   type: messageTypeEnum("type").notNull().default("text"), // text (普通对话) / task_summary (任务卡片) / question (追问)
   payload: jsonb("payload"), // 结构化数据，用于 RN 渲染组件 (如任务详情、确认按钮等)
-  
+
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 
@@ -175,8 +222,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   accounts: many(accounts),
   groups: many(groupUsers),
   createdTasks: many(tasks, { relationName: "createdBy" }),
-  assignedTasks: many(tasks, { relationName: "assignedTo" }),
   completedTasks: many(tasks, { relationName: "completedBy" }),
+  taskAssignments: many(taskAssignments),
   devices: many(devices),
   messages: many(messages),
   defaultGroup: one(groups, {
@@ -213,11 +260,6 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
     references: [users.id],
     relationName: "createdBy",
   }),
-  assignee: one(users, {
-    fields: [tasks.assignedTo],
-    references: [users.id],
-    relationName: "assignedTo",
-  }),
   completer: one(users, {
     fields: [tasks.completedBy],
     references: [users.id],
@@ -231,6 +273,7 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
   recurringChildren: many(tasks, {
     relationName: "recurringParent",
   }),
+  assignments: many(taskAssignments),
 }));
 
 export const devicesRelations = relations(devices, ({ one }) => ({
@@ -247,6 +290,17 @@ export const devicesRelations = relations(devices, ({ one }) => ({
 export const messagesRelations = relations(messages, ({ one }) => ({
   user: one(users, {
     fields: [messages.userId],
+    references: [users.id],
+  }),
+}));
+
+export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskAssignments.taskId],
+    references: [tasks.id],
+  }),
+  user: one(users, {
+    fields: [taskAssignments.userId],
     references: [users.id],
   }),
 }));

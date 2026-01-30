@@ -5,8 +5,10 @@ export interface CreateTaskInput {
   title: string;
   description?: string;
   groupId?: number | null;
-  assignedTo?: number | null;
-  dueDate?: Date | null;
+  assignedToIds?: number[];
+  dueDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   source?: TaskSource;
   priority?: Priority;
   isRecurring?: boolean;
@@ -17,8 +19,10 @@ export interface CreateTaskInput {
 export interface UpdateTaskInput {
   title?: string;
   description?: string;
-  assignedTo?: number | null;
-  dueDate?: Date | null;
+  assignedToIds?: number[];
+  dueDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   priority?: Priority;
   isRecurring?: boolean;
   recurringRule?: RecurringRule | null;
@@ -46,12 +50,14 @@ export interface TaskInfo {
   groupName: string | null;
   createdBy: number;
   createdByName: string | null;
-  assignedTo: number | null;
-  assignedToName: string | null;
+  assignedToIds: number[];
+  assignedToNames: string[];
   completedBy: number | null;
   completedByName: string | null;
   completedAt: Date | null;
-  dueDate: Date | null;
+  dueDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
   source: TaskSource;
   isRecurring: boolean;
   recurringRule: RecurringRule | null;

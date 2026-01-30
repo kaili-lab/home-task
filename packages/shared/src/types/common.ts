@@ -11,10 +11,15 @@ export type Priority = "high" | "medium" | "low";
 
 // 重复规则类型
 export type RecurringRule = {
-  type: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  freq: "daily" | "weekly" | "monthly";
   interval: number; // 间隔（如每2周 = interval: 2）
-  daysOfWeek?: number[]; // 周几（0=周日, 1=周一...6=周六）仅weekly使用
-  dayOfMonth?: number; // 每月几号（1-31）仅monthly使用
-  endDate?: string; // 结束日期（可选，如 '2026-12-31'）
-  endAfterOccurrences?: number; // 或指定生成N次后结束
+  startDate: string; // 开始日期 YYYY-MM-DD（必填）
+
+  // 结束条件（二选一必填，业务层校验）
+  endDate?: string; // 结束日期 YYYY-MM-DD
+  endAfterOccurrences?: number; // 重复N次后结束
+
+  // 按频率使用
+  daysOfWeek?: number[]; // weekly 时使用（0=周日, 1=周一...6=周六）
+  dayOfMonth?: number; // monthly 时使用（1-31）
 };

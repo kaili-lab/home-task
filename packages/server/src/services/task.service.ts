@@ -1,6 +1,6 @@
 import { eq, and, or, isNull, inArray, desc, asc, count } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
-import { tasks, groupUsers, users, groups } from "../db/schema";
+import { tasks, groupUsers, users, groups, taskAssignments } from "../db/schema";
 import type {
   TaskStatus,
   TaskSource,
@@ -30,7 +30,7 @@ export class TaskService {
         where: and(
           eq(groupUsers.groupId, data.groupId),
           eq(groupUsers.userId, userId),
-          eq(groupUsers.status, "active")
+          eq(groupUsers.status, "active"),
         ),
       });
 
@@ -39,54 +39,69 @@ export class TaskService {
       }
     }
 
-    // 验证assignedTo存在（如果指定）
-    if (data.assignedTo !== null && data.assignedTo !== undefined) {
-      const assignee = await this.db.query.users.findFirst({
-        where: eq(users.id, data.assignedTo),
-      });
+    // 验证所有 assignedToIds 存在（如果指定）
+    if (data.assignedToIds && data.assignedToIds.length > 0) {
+      const assignees = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(inArray(users.id, data.assignedToIds));
 
-      if (!assignee) {
-        throw new Error("被分配的用户不存在");
+      if (assignees.length !== data.assignedToIds.length) {
+        throw new Error("部分被分配的用户不存在");
       }
 
-      // 如果是群组任务，验证被分配者也是群组成员
+      // 如果是群组任务，验证所有被分配者都是群组成员
       if (data.groupId !== null && data.groupId !== undefined) {
-        const assigneeMembership = await this.db.query.groupUsers.findFirst({
-          where: and(
-            eq(groupUsers.groupId, data.groupId),
-            eq(groupUsers.userId, data.assignedTo),
-            eq(groupUsers.status, "active")
-          ),
-        });
+        const memberships = await this.db
+          .select({ userId: groupUsers.userId })
+          .from(groupUsers)
+          .where(
+            and(
+              eq(groupUsers.groupId, data.groupId),
+              inArray(groupUsers.userId, data.assignedToIds),
+              eq(groupUsers.status, "active"),
+            ),
+          );
 
-        if (!assigneeMembership) {
-          throw new Error("被分配的用户不是该群组的成员");
+        if (memberships.length !== data.assignedToIds.length) {
+          throw new Error("部分被分配的用户不是该群组的成员");
         }
       }
     }
 
     // 创建任务记录
-    const result = await this.db
+    const result = (await this.db
       .insert(tasks)
       .values({
         title: data.title,
         description: data.description || null,
         groupId: data.groupId || null,
         createdBy: userId,
-        assignedTo: data.assignedTo || null,
         dueDate: data.dueDate || null,
+        startTime: data.startTime || null,
+        endTime: data.endTime || null,
         source: data.source || "human",
         priority: data.priority || "medium",
         isRecurring: data.isRecurring || false,
-        recurringRule: data.recurringRule ? JSON.stringify(data.recurringRule) : null,
-        recurringParentId: null, // 创建时总是null，只有生成的实例才有值
+        recurringRule: data.recurringRule || null,
+        recurringParentId: null,
         status: "pending",
       })
-      .returning() as Array<typeof tasks.$inferSelect>;
+      .returning()) as Array<typeof tasks.$inferSelect>;
 
     const task = result[0];
     if (!task) {
       throw new Error("创建任务失败");
+    }
+
+    // 创建任务分配记录
+    if (data.assignedToIds && data.assignedToIds.length > 0) {
+      await this.db.insert(taskAssignments).values(
+        data.assignedToIds.map((assigneeId) => ({
+          taskId: task.id,
+          userId: assigneeId,
+        })),
+      );
     }
 
     // 获取完整任务信息（包含关联数据）
@@ -117,8 +132,8 @@ export class TaskService {
       conditions.push(
         or(
           and(isNull(tasks.groupId), eq(tasks.createdBy, userId)), // 个人任务
-          inArray(tasks.groupId, groupIds) // 群组任务
-        )
+          inArray(tasks.groupId, groupIds), // 群组任务
+        ),
       );
     } else {
       // 如果用户没有群组，只查询个人任务
@@ -139,12 +154,22 @@ export class TaskService {
       }
     }
 
-    // 分配筛选
+    // 分配筛选（通过 taskAssignments 表）
+    let assignedTaskIds: number[] | undefined;
     if (filters.assignedTo !== undefined) {
-      if (filters.assignedTo === "me") {
-        conditions.push(eq(tasks.assignedTo, userId));
+      const targetUserId = filters.assignedTo === "me" ? userId : filters.assignedTo;
+      const assignments = await this.db
+        .select({ taskId: taskAssignments.taskId })
+        .from(taskAssignments)
+        .where(eq(taskAssignments.userId, targetUserId));
+
+      assignedTaskIds = assignments.map((a) => a.taskId);
+
+      if (assignedTaskIds.length > 0) {
+        conditions.push(inArray(tasks.id, assignedTaskIds));
       } else {
-        conditions.push(eq(tasks.assignedTo, filters.assignedTo));
+        // 如果没有分配的任务，返回空结果
+        conditions.push(eq(tasks.id, -1)); // 不存在的任务ID
       }
     }
 
@@ -161,10 +186,7 @@ export class TaskService {
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     // 查询总数
-    const totalResult = await this.db
-      .select({ count: count() })
-      .from(tasks)
-      .where(whereClause);
+    const totalResult = await this.db.select({ count: count() }).from(tasks).where(whereClause);
 
     const total = totalResult[0]?.count || 0;
 
@@ -178,12 +200,35 @@ export class TaskService {
       .limit(limit)
       .offset(offset);
 
+    // 获取任务ID列表
+    const taskIds = taskList.map((row) => row.tasks.id);
+
+    // 批量查询任务分配
+    const assignmentsMap = new Map<number, number[]>();
+    if (taskIds.length > 0) {
+      const assignments = await this.db
+        .select()
+        .from(taskAssignments)
+        .where(inArray(taskAssignments.taskId, taskIds));
+
+      assignments.forEach((assignment) => {
+        if (!assignmentsMap.has(assignment.taskId)) {
+          assignmentsMap.set(assignment.taskId, []);
+        }
+        assignmentsMap.get(assignment.taskId)!.push(assignment.userId);
+      });
+    }
+
     // 收集所有需要查询的用户ID
     const userIds = new Set<number>();
     taskList.forEach((row) => {
       if (row.tasks.createdBy) userIds.add(row.tasks.createdBy);
-      if (row.tasks.assignedTo) userIds.add(row.tasks.assignedTo);
       if (row.tasks.completedBy) userIds.add(row.tasks.completedBy);
+    });
+
+    // 添加所有被分配的用户ID
+    assignmentsMap.forEach((userIdList) => {
+      userIdList.forEach((id) => userIds.add(id));
     });
 
     // 批量查询用户信息
@@ -202,6 +247,11 @@ export class TaskService {
     // 构建返回数据
     const tasksWithRelations: TaskInfo[] = taskList.map((row) => {
       const task = row.tasks;
+      const assignedIds = assignmentsMap.get(task.id) || [];
+      const assignedNames = assignedIds
+        .map((id) => userMap.get(id))
+        .filter((name): name is string => name !== null && name !== undefined);
+
       return {
         id: task.id,
         title: task.title,
@@ -212,15 +262,17 @@ export class TaskService {
         groupName: row.groups?.name || null,
         createdBy: task.createdBy,
         createdByName: userMap.get(task.createdBy) || null,
-        assignedTo: task.assignedTo,
-        assignedToName: task.assignedTo ? userMap.get(task.assignedTo) || null : null,
+        assignedToIds: assignedIds,
+        assignedToNames: assignedNames,
         completedBy: task.completedBy,
         completedByName: task.completedBy ? userMap.get(task.completedBy) || null : null,
         completedAt: task.completedAt,
         dueDate: task.dueDate,
+        startTime: task.startTime,
+        endTime: task.endTime,
         source: task.source as TaskSource,
         isRecurring: task.isRecurring,
-        recurringRule: task.recurringRule ? JSON.parse(task.recurringRule as string) as RecurringRule : null,
+        recurringRule: task.recurringRule as RecurringRule | null,
         recurringParentId: task.recurringParentId,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
@@ -257,7 +309,7 @@ export class TaskService {
           where: and(
             eq(groupUsers.groupId, task.groupId),
             eq(groupUsers.userId, userId),
-            eq(groupUsers.status, "active")
+            eq(groupUsers.status, "active"),
           ),
         });
 
@@ -268,6 +320,14 @@ export class TaskService {
         throw new Error("您无权查看此任务");
       }
     }
+
+    // 查询任务分配
+    const assignments = await this.db
+      .select()
+      .from(taskAssignments)
+      .where(eq(taskAssignments.taskId, taskId));
+
+    const assignedIds = assignments.map((a) => a.userId);
 
     // 查询关联数据
     const group = task.groupId
@@ -282,12 +342,17 @@ export class TaskService {
       columns: { nickname: true },
     });
 
-    const assignee = task.assignedTo
-      ? await this.db.query.users.findFirst({
-          where: eq(users.id, task.assignedTo),
-          columns: { nickname: true },
-        })
-      : null;
+    // 批量查询被分配者
+    let assignedNames: string[] = [];
+    if (assignedIds.length > 0) {
+      const assignees = await this.db
+        .select({ id: users.id, nickname: users.nickname })
+        .from(users)
+        .where(inArray(users.id, assignedIds));
+      assignedNames = assignees
+        .map((u) => u.nickname)
+        .filter((name): name is string => name !== null && name !== undefined);
+    }
 
     const completer = task.completedBy
       ? await this.db.query.users.findFirst({
@@ -306,15 +371,17 @@ export class TaskService {
       groupName: group?.name || null,
       createdBy: task.createdBy,
       createdByName: creator?.nickname || null,
-      assignedTo: task.assignedTo,
-      assignedToName: assignee?.nickname || null,
+      assignedToIds: assignedIds,
+      assignedToNames: assignedNames,
       completedBy: task.completedBy,
       completedByName: completer?.nickname || null,
       completedAt: task.completedAt,
       dueDate: task.dueDate,
+      startTime: task.startTime,
+      endTime: task.endTime,
       source: task.source as TaskSource,
       isRecurring: task.isRecurring,
-      recurringRule: task.recurringRule ? JSON.parse(task.recurringRule as string) as RecurringRule : null,
+      recurringRule: task.recurringRule as RecurringRule | null,
       recurringParentId: task.recurringParentId,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
@@ -338,28 +405,36 @@ export class TaskService {
       throw new Error("只有创建者可以更新任务");
     }
 
-    // 验证assignedTo（如果指定）
-    if (data.assignedTo !== null && data.assignedTo !== undefined) {
-      const assignee = await this.db.query.users.findFirst({
-        where: eq(users.id, data.assignedTo),
-      });
+    // 验证所有 assignedToIds（如果指定）
+    if (
+      data.assignedToIds !== undefined &&
+      data.assignedToIds !== null &&
+      data.assignedToIds.length > 0
+    ) {
+      const assignees = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(inArray(users.id, data.assignedToIds));
 
-      if (!assignee) {
-        throw new Error("被分配的用户不存在");
+      if (assignees.length !== data.assignedToIds.length) {
+        throw new Error("部分被分配的用户不存在");
       }
 
       // 如果是群组任务，验证被分配者也是群组成员
       if (task.groupId !== null) {
-        const assigneeMembership = await this.db.query.groupUsers.findFirst({
-          where: and(
-            eq(groupUsers.groupId, task.groupId),
-            eq(groupUsers.userId, data.assignedTo),
-            eq(groupUsers.status, "active")
-          ),
-        });
+        const memberships = await this.db
+          .select({ userId: groupUsers.userId })
+          .from(groupUsers)
+          .where(
+            and(
+              eq(groupUsers.groupId, task.groupId),
+              inArray(groupUsers.userId, data.assignedToIds),
+              eq(groupUsers.status, "active"),
+            ),
+          );
 
-        if (!assigneeMembership) {
-          throw new Error("被分配的用户不是该群组的成员");
+        if (memberships.length !== data.assignedToIds.length) {
+          throw new Error("部分被分配的用户不是该群组的成员");
         }
       }
     }
@@ -371,11 +446,14 @@ export class TaskService {
     if (data.description !== undefined) {
       updateData.description = data.description || null;
     }
-    if (data.assignedTo !== undefined) {
-      updateData.assignedTo = data.assignedTo;
-    }
     if (data.dueDate !== undefined) {
       updateData.dueDate = data.dueDate;
+    }
+    if (data.startTime !== undefined) {
+      updateData.startTime = data.startTime;
+    }
+    if (data.endTime !== undefined) {
+      updateData.endTime = data.endTime;
     }
     if (data.priority !== undefined) {
       updateData.priority = data.priority;
@@ -384,11 +462,27 @@ export class TaskService {
       updateData.isRecurring = data.isRecurring;
     }
     if (data.recurringRule !== undefined) {
-      updateData.recurringRule = data.recurringRule ? JSON.stringify(data.recurringRule) : null;
+      updateData.recurringRule = data.recurringRule;
     }
     updateData.updatedAt = new Date();
 
     await this.db.update(tasks).set(updateData).where(eq(tasks.id, taskId));
+
+    // 更新任务分配
+    if (data.assignedToIds !== undefined) {
+      // 删除旧的分配
+      await this.db.delete(taskAssignments).where(eq(taskAssignments.taskId, taskId));
+
+      // 创建新的分配
+      if (data.assignedToIds !== null && data.assignedToIds.length > 0) {
+        await this.db.insert(taskAssignments).values(
+          data.assignedToIds.map((assigneeId) => ({
+            taskId,
+            userId: assigneeId,
+          })),
+        );
+      }
+    }
 
     return this.getTaskById(taskId, userId);
   }
@@ -396,11 +490,7 @@ export class TaskService {
   /**
    * 更新任务状态
    */
-  async updateTaskStatus(
-    taskId: number,
-    userId: number,
-    status: TaskStatus
-  ): Promise<TaskInfo> {
+  async updateTaskStatus(taskId: number, userId: number, status: TaskStatus): Promise<TaskInfo> {
     const task = await this.db.query.tasks.findFirst({
       where: eq(tasks.id, taskId),
     });
@@ -416,7 +506,7 @@ export class TaskService {
           where: and(
             eq(groupUsers.groupId, task.groupId),
             eq(groupUsers.userId, userId),
-            eq(groupUsers.status, "active")
+            eq(groupUsers.status, "active"),
           ),
         });
 

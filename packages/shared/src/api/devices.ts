@@ -26,6 +26,8 @@ export interface DeviceTask {
   title: string;
   status: string;
   priority: string;
-  dueDate: Date | null;
+  dueDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
   createdAt: Date;
 }

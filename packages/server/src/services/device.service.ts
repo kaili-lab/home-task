@@ -1,11 +1,7 @@
 import { eq, and, or, isNull, inArray } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { devices, tasks, groupUsers, groups } from "../db/schema";
-import type {
-  CreateDeviceInput,
-  DeviceInfo,
-  DeviceTask,
-} from "shared";
+import type { CreateDeviceInput, DeviceInfo, DeviceTask } from "shared";
 
 /**
  * 设备Service层
@@ -19,11 +15,19 @@ export class DeviceService {
    */
   async createDevice(userId: number, data: CreateDeviceInput): Promise<DeviceInfo> {
     // 验证userId或groupId二选一
-    if ((data.userId === null || data.userId === undefined) && (data.groupId === null || data.groupId === undefined)) {
+    if (
+      (data.userId === null || data.userId === undefined) &&
+      (data.groupId === null || data.groupId === undefined)
+    ) {
       throw new Error("必须指定userId或groupId之一");
     }
 
-    if (data.userId !== null && data.userId !== undefined && data.groupId !== null && data.groupId !== undefined) {
+    if (
+      data.userId !== null &&
+      data.userId !== undefined &&
+      data.groupId !== null &&
+      data.groupId !== undefined
+    ) {
       throw new Error("userId和groupId不能同时指定");
     }
 
@@ -33,7 +37,7 @@ export class DeviceService {
         where: and(
           eq(groupUsers.groupId, data.groupId),
           eq(groupUsers.userId, userId),
-          eq(groupUsers.status, "active")
+          eq(groupUsers.status, "active"),
         ),
       });
 
@@ -95,10 +99,7 @@ export class DeviceService {
    */
   async getUserDevices(userId: number): Promise<DeviceInfo[]> {
     // 查询用户直接绑定的设备
-    const userDevices = await this.db
-      .select()
-      .from(devices)
-      .where(eq(devices.userId, userId));
+    const userDevices = await this.db.select().from(devices).where(eq(devices.userId, userId));
 
     // 查询用户所在群组的设备
     const userGroups = await this.db
@@ -119,9 +120,7 @@ export class DeviceService {
 
     // 合并并去重
     const allDevices = [...userDevices, ...groupDevices];
-    const uniqueDevices = Array.from(
-      new Map(allDevices.map((d) => [d.id, d])).values()
-    );
+    const uniqueDevices = Array.from(new Map(allDevices.map((d) => [d.id, d])).values());
 
     // 查询群组名称
     const devicesWithGroupNames = await Promise.all(
@@ -145,7 +144,7 @@ export class DeviceService {
           status: device.status,
           createdAt: device.createdAt,
         };
-      })
+      }),
     );
 
     return devicesWithGroupNames;
@@ -185,8 +184,8 @@ export class DeviceService {
           .where(
             or(
               and(isNull(tasks.groupId), eq(tasks.createdBy, device.userId)), // 个人任务
-              inArray(tasks.groupId, groupIds) // 群组任务
-            )
+              inArray(tasks.groupId, groupIds), // 群组任务
+            ),
           );
       } else {
         // 如果用户没有群组，只查询个人任务
@@ -197,15 +196,12 @@ export class DeviceService {
       }
     } else if (device.groupId !== null) {
       // 绑定到群组：仅该群组的公开任务
-      taskList = await this.db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.groupId, device.groupId));
+      taskList = await this.db.select().from(tasks).where(eq(tasks.groupId, device.groupId));
     }
 
     // 只返回pending和in_progress状态的任务
     const filteredTasks = taskList.filter(
-      (task) => task.status === "pending" || task.status === "in_progress"
+      (task) => task.status === "pending" || task.status === "in_progress",
     );
 
     return filteredTasks.map((task) => ({
@@ -214,6 +210,8 @@ export class DeviceService {
       status: task.status,
       priority: task.priority,
       dueDate: task.dueDate,
+      startTime: task.startTime,
+      endTime: task.endTime,
       createdAt: task.createdAt,
     }));
   }
@@ -237,7 +235,7 @@ export class DeviceService {
           where: and(
             eq(groupUsers.groupId, device.groupId),
             eq(groupUsers.userId, userId),
-            eq(groupUsers.status, "active")
+            eq(groupUsers.status, "active"),
           ),
         });
 
