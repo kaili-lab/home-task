@@ -1,12 +1,15 @@
-import type { Group } from "@/types";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface SidebarGroupsProps {
-  groups: Group[];
   onCreateGroup?: () => void;
 }
 
-export function SidebarGroups({ groups, onCreateGroup }: SidebarGroupsProps) {
+export function SidebarGroups({ onCreateGroup }: SidebarGroupsProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   return (
     <div className="p-3 border-t border-gray-100">
       <div className="flex items-center justify-between px-3 mb-2">
@@ -20,25 +23,32 @@ export function SidebarGroups({ groups, onCreateGroup }: SidebarGroupsProps) {
           + 创建
         </Button>
       </div>
-      <ul className="space-y-1">
-        {groups.map((group) => (
-          <li key={group.id}>
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-              <span className="text-lg">{group.icon}</span>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="flex items-center gap-1">
-                  <span className="font-medium text-gray-700 truncate">{group.name}</span>
-                  {group.isDefault && <span className="text-yellow-500">⭐</span>}
-                </div>
-                <div className="text-xs text-gray-400">
-                  {group.isDefault && "默认 · "}
-                  {group.memberCount}位成员
-                </div>
-              </div>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <div className="space-y-1 mb-2">
+        <button
+          onClick={() => navigate("/my-groups/created")}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+            location.pathname === "/my-groups/created"
+              ? "bg-orange-50 text-orange-600 font-medium"
+              : "text-gray-600 hover:bg-gray-50",
+          )}
+        >
+          <span>👑</span>
+          <span>我创建的群组</span>
+        </button>
+        <button
+          onClick={() => navigate("/my-groups/joined")}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+            location.pathname === "/my-groups/joined"
+              ? "bg-orange-50 text-orange-600 font-medium"
+              : "text-gray-600 hover:bg-gray-50",
+          )}
+        >
+          <span>➕</span>
+          <span>我加入的群组</span>
+        </button>
+      </div>
     </div>
   );
 }

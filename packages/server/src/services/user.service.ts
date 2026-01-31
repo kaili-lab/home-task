@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { users, groupUsers, groups } from "../db/schema";
 import type { UpdateUserInput, UserInfo, UserGroup } from "shared";
@@ -126,14 +126,29 @@ export class UserService {
       .where(and(eq(groupUsers.userId, userId), eq(groupUsers.status, "active")))
       .orderBy(groups.createdAt);
 
-    return userGroups.map((ug) => ({
-      id: ug.id,
-      name: ug.name,
-      inviteCode: ug.inviteCode,
-      avatar: ug.avatar || null,
-      role: ug.role,
-      joinedAt: ug.joinedAt,
-      createdAt: ug.createdAt,
-    }));
+    // 为每个群组查询成员数量
+    const groupsWithMemberCount = await Promise.all(
+      userGroups.map(async (ug) => {
+        const memberCountResult = await this.db
+          .select({ count: count() })
+          .from(groupUsers)
+          .where(and(eq(groupUsers.groupId, ug.id), eq(groupUsers.status, "active")));
+        
+        const memberCount = Number(memberCountResult[0]?.count || 0);
+
+        return {
+          id: ug.id,
+          name: ug.name,
+          inviteCode: ug.inviteCode,
+          avatar: ug.avatar || null,
+          role: ug.role,
+          joinedAt: ug.joinedAt,
+          createdAt: ug.createdAt,
+          memberCount,
+        };
+      })
+    );
+
+    return groupsWithMemberCount;
   }
 }

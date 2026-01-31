@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTaskList } from "@/hooks/useTaskList";
 import { Button } from "@/components/ui/button";
 import { DayGroup } from "./DayGroup";
+import { DayGroupSkeleton } from "./DayGroupSkeleton";
 import type { Task } from "@/types";
 
 interface WeekViewProps {
@@ -9,7 +10,7 @@ interface WeekViewProps {
 }
 
 export function WeekView({ onCreateTask }: WeekViewProps) {
-  const { tasks, toggleTaskStatus } = useTaskList();
+  const { tasks, toggleTaskStatus, loading } = useTaskList();
 
   // 获取本周日期范围（周一到周日）
   const weekDays = useMemo(() => {
@@ -69,7 +70,9 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
           const dateStr = date.toISOString().split("T")[0];
           const dayTasks = tasksByDate[dateStr] || [];
 
-          return (
+          return loading ? (
+            <DayGroupSkeleton key={dateStr} date={date} taskCount={2} />
+          ) : (
             <DayGroup
               key={dateStr}
               date={date}

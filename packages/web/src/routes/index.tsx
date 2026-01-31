@@ -10,9 +10,11 @@ import { VerifyEmailView } from "@/features/auth/VerifyEmailView";
 import { TodayView } from "@/features/today/TodayView";
 import { WeekView } from "@/features/week/WeekView";
 import { AIView } from "@/features/ai/AIView";
-import { GroupView } from "@/features/group/GroupView";
+import { MyCreatedGroupsView } from "@/features/group/MyCreatedGroupsView";
+import { MyJoinedGroupsView } from "@/features/group/MyJoinedGroupsView";
 import { ProfileView } from "@/features/profile/ProfileView";
 import { useApp } from "@/contexts/AppContext";
+import { PageLoader } from "@/components/ui/page-loader";
 
 /**
  * 根路径重定向组件
@@ -22,11 +24,7 @@ function RootRedirect() {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   return <Navigate to={isAuthenticated ? "/today" : "/login"} replace />;
@@ -37,11 +35,11 @@ function RootRedirect() {
  * 包裹AppLayout和所有需要登录的路由
  */
 function ProtectedLayout() {
-  const { createGroupModal, groups } = useApp();
+  const { createGroupModal } = useApp();
 
   return (
     <ProtectedRoute>
-      <AppLayout onCreateGroup={createGroupModal.open} groups={groups} />
+      <AppLayout onCreateGroup={createGroupModal.open} />
     </ProtectedRoute>
   );
 }
@@ -69,7 +67,8 @@ export function AppRoutes() {
         <Route path="/today" element={<TodayView onCreateTask={createTaskModal.open} />} />
         <Route path="/week" element={<WeekView onCreateTask={createTaskModal.open} />} />
         <Route path="/ai" element={<AIView />} />
-        <Route path="/group" element={<GroupView />} />
+        <Route path="/my-groups/created" element={<MyCreatedGroupsView />} />
+        <Route path="/my-groups/joined" element={<MyJoinedGroupsView />} />
         <Route path="/profile" element={<ProfileView />} />
       </Route>
 

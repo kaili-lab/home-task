@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { authClient } from "@/lib/auth-client";
-import { showToastError, showToastSuccess } from "@/utils/toast";
+import { showToastSuccess } from "@/utils/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -14,7 +13,7 @@ export function VerifyEmailView() {
   useEffect(() => {
     // Better Auth 验证流程：
     // 1. 用户点击邮件中的链接：{BETTER_AUTH_URL}/api/auth/verify-email?token=xxx&callbackURL=xxx
-    // 2. Better Auth 后端处理验证，验证成功后重定向到 callbackURL
+    // 2. Better Auth 后端处理验证，验证成功后重定向到 callbackURL?success=true
     // 3. 前端页面（这个组件）接收重定向，显示验证结果
 
     // 检查 URL 参数
@@ -29,16 +28,8 @@ export function VerifyEmailView() {
       return;
     }
 
-    // 如果 URL 中没有 token，可能是直接访问页面
-    if (!token && !success) {
-      setStatus("error");
-      setErrorMessage("无效的验证链接");
-      return;
-    }
-
-    // 如果有 success 参数或没有错误，表示验证成功
-    // Better Auth 验证成功后可能会重定向到 callbackURL，并可能包含 success 参数
-    if (success === "true" || (!error && token)) {
+    // 如果有 success 参数，表示验证成功（服务器端会在 callbackURL 中添加 success=true）
+    if (success === "true") {
       setStatus("success");
       showToastSuccess("邮箱验证成功！");
 
@@ -46,10 +37,20 @@ export function VerifyEmailView() {
       setTimeout(() => {
         navigate("/login", { replace: true });
       }, 2000);
-    } else {
-      // 其他情况，显示加载状态
-      setStatus("loading");
+      return;
     }
+
+    // 如果有 token 参数，说明用户正在点击验证链接，显示加载状态
+    // Better Auth 会处理验证并重定向到 callbackURL
+    if (token) {
+      setStatus("loading");
+      return;
+    }
+
+    // 如果既没有 error、success，也没有 token，可能是直接访问页面
+    // 显示错误提示
+    setStatus("error");
+    setErrorMessage("无效的验证链接");
   }, [searchParams, navigate]);
 
   return (

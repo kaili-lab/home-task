@@ -107,12 +107,29 @@ export const createAuth = (env: Bindings) => {
     // 📧 邮箱验证配置
     emailVerification: {
       sendVerificationEmail: async ({ user, url, token }, request) => {
-        // 添加 callbackURL 参数，指向前端验证页面
+        // 解析 URL，确保 callbackURL 指向完整的前端 URL，并添加 success 参数
         const frontendUrl = config.FRONTEND_URL || "http://localhost:5173";
-        const callbackURL = `${frontendUrl}/verify-email`;
-        const verificationUrl = url.includes("callbackURL")
-          ? url
-          : `${url}${url.includes("?") ? "&" : "?"}callbackURL=${encodeURIComponent(callbackURL)}`;
+        const baseCallbackURL = `${frontendUrl}/verify-email`;
+
+        // 解析传入的 URL
+        const urlObj = new URL(url);
+        const existingCallbackURL = urlObj.searchParams.get("callbackURL");
+
+        // 构建目标 callbackURL：始终使用前端地址，并添加 success=true 参数
+        const callbackUrlObj = new URL(baseCallbackURL);
+        callbackUrlObj.searchParams.set("success", "true");
+        const targetCallbackURL = callbackUrlObj.toString();
+
+        // 如果 callbackURL 不存在或不是完整 URL（相对路径），则替换为完整的前端 URL
+        // 如果存在且是完整 URL，也替换为我们的前端 URL（确保一致性）
+        if (!existingCallbackURL || (!existingCallbackURL.startsWith("http://") && !existingCallbackURL.startsWith("https://"))) {
+          urlObj.searchParams.set("callbackURL", targetCallbackURL);
+        } else {
+          // 即使 existingCallbackURL 是完整 URL，也替换为我们的前端 URL（确保指向正确的前端地址）
+          urlObj.searchParams.set("callbackURL", targetCallbackURL);
+        }
+
+        const verificationUrl = urlObj.toString();
 
         await emailService.sendVerificationEmailForAuth(
           { user, url: verificationUrl, token },

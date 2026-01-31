@@ -16,13 +16,13 @@ const groupsRoutes = new Hono<{
 // 创建群组的Zod Schema
 const createGroupSchema = z.object({
   name: z.string().min(1).max(100),
-  avatar: z.string().url().optional().or(z.literal("")),
+  avatar: z.string().max(500).optional().or(z.literal("")), // 支持URL或emoji
 });
 
 // 更新群组的Zod Schema
 const updateGroupSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  avatar: z.string().url().optional().or(z.literal("")),
+  avatar: z.string().max(500).optional().or(z.literal("")), // 支持URL或emoji
 });
 
 // 加入群组的Zod Schema

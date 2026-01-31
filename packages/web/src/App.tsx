@@ -1,8 +1,10 @@
-import { AppProvider, useApp } from "@/contexts/AppContext";
+import { AppProvider, useApp, userGroupToGroup } from "@/contexts/AppContext";
 import { AppRoutes } from "@/routes";
 import { CreateTaskModal } from "@/features/task/CreateTaskModal";
 import { CreateGroupModal } from "@/features/group/CreateGroupModal";
 import { useTaskList } from "@/hooks/useTaskList";
+import { createGroup, getGroups } from "@/services/groups.api";
+import { showToastSuccess, showToastError } from "@/utils/toast";
 
 function AppContent() {
   const { createTaskModal, createGroupModal, groups, setGroups } = useApp();
@@ -12,16 +14,24 @@ function AppContent() {
     createTask(data);
   };
 
-  const handleCreateGroup = (data: { name: string; icon: string }) => {
-    const newGroup = {
-      id: Date.now(),
-      name: data.name,
-      icon: data.icon,
-      isDefault: false,
-      memberCount: 1,
-      inviteCode: Math.random().toString(36).substr(2, 4).toUpperCase(),
-    };
-    setGroups((prev) => [...prev, newGroup]);
+  const handleCreateGroup = async (data: { name: string; icon: string }) => {
+    try {
+      // 调用API创建群组
+      await createGroup({
+        name: data.name,
+        avatar: data.icon, // 将icon作为avatar发送给后端
+      });
+
+      // 创建成功后刷新群组列表
+      const userGroups = await getGroups();
+      const convertedGroups = userGroups.map(userGroupToGroup);
+      setGroups(convertedGroups);
+
+      showToastSuccess("群组创建成功！");
+    } catch (error) {
+      console.error("创建群组失败:", error);
+      showToastError(error instanceof Error ? error.message : "创建群组失败，请稍后重试");
+    }
   };
 
   return (

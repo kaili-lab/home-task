@@ -149,48 +149,6 @@ export const mockUsers: User[] = [
   },
 ];
 
-export const mockGroups: Group[] = [
-  {
-    id: 1,
-    name: "温馨小家",
-    icon: "🏠",
-    role: "owner",
-    memberCount: 3,
-    inviteCode: "8859",
-  },
-  {
-    id: 2,
-    name: "登山俱乐部",
-    icon: "⛰️",
-    role: "member",
-    memberCount: 6,
-    inviteCode: "6677",
-  },
-  {
-    id: 3,
-    name: "美食分享",
-    icon: "🍜",
-    role: "owner",
-    memberCount: 5,
-    inviteCode: "3344",
-  },
-  {
-    id: 4,
-    name: "周末骑行",
-    icon: "🚴",
-    role: "owner",
-    memberCount: 8,
-    inviteCode: "9921",
-  },
-];
-
-// 群组成员映射表：groupId -> userIds（第一个成员为群主）
-export const mockGroupMembers: Record<number, number[]> = {
-  1: [1, 2, 3], // 温馨小家：Kai(群主), Mom, Dad
-  2: [5, 1, 6, 7, 8, 9], // 登山俱乐部：张峰(群主) + Kai和其他登山爱好者
-  3: [1, 10, 11, 12, 13], // 美食分享：Kai(群主) + 4个美食爱好者
-  4: [1, 14, 15, 16, 17, 18, 19, 20], // 周末骑行：Kai(群主) + 7个骑行爱好者
-};
 
 export const mockTasks: Task[] = [
   // 添加本周其他日期的任务

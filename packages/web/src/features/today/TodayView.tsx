@@ -3,9 +3,10 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { TodayHeader } from "./TodayHeader";
 import { TaskSection } from "@/components/task/TaskSection";
 import { TaskCard } from "@/components/task/TaskCard";
+import { TaskListSkeleton } from "@/features/task/TaskListSkeleton";
 
 export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
-  const { tasks, toggleTaskStatus } = useTaskList();
+  const { tasks, toggleTaskStatus, loading } = useTaskList();
   const { currentUser } = useCurrentUser();
 
   const personalTasks = tasks.filter((t) => !t.groupId);
@@ -21,11 +22,19 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
 
       {/* 个人任务 */}
       <TaskSection title="个人任务" icon="👤" count={personalTasks.length}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {personalTasks.map((task) => (
-            <TaskCard key={task.id} task={task} onToggle={toggleTaskStatus} />
-          ))}
-        </div>
+        {loading ? (
+          <TaskListSkeleton count={2} />
+        ) : personalTasks.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <p>暂无个人任务</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {personalTasks.map((task) => (
+              <TaskCard key={task.id} task={task} onToggle={toggleTaskStatus} />
+            ))}
+          </div>
+        )}
       </TaskSection>
 
       {/* 家庭任务 */}
@@ -35,11 +44,19 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
         count={groupTasks.length}
         subtitle="来自群组：温馨小家 ⭐"
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {groupTasks.map((task) => (
-            <TaskCard key={task.id} task={task} onToggle={toggleTaskStatus} />
-          ))}
-        </div>
+        {loading ? (
+          <TaskListSkeleton count={2} />
+        ) : groupTasks.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <p>暂无家庭任务</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {groupTasks.map((task) => (
+              <TaskCard key={task.id} task={task} onToggle={toggleTaskStatus} />
+            ))}
+          </div>
+        )}
       </TaskSection>
     </section>
   );

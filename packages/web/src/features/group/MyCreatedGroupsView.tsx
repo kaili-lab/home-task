@@ -10,9 +10,10 @@ import { leaveGroup, deleteGroup } from "@/services/groups.api";
 import { showToastError, showToastSuccess } from "@/utils/toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-export function GroupView() {
+export function MyCreatedGroupsView() {
   const { groups, setGroups, createGroupModal } = useApp();
   const { currentUser } = useCurrentUser();
+  const createdGroups = groups.filter((g) => g.role === "owner");
   const [loading, setLoading] = useState<number | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -77,13 +78,10 @@ export function GroupView() {
     <section className="p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">家庭群组管理 👥</h2>
-          <p className="text-gray-500 text-sm mt-1">管理你的家庭群组和成员</p>
+          <h2 className="text-2xl font-bold text-gray-800">我创建的群组 👑</h2>
+          <p className="text-gray-500 text-sm mt-1">管理你创建的家庭群组</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="bg-white">
-            输入邀请码
-          </Button>
           <Button onClick={createGroupModal.open} className="bg-orange-500 hover:bg-orange-600">
             <span className="mr-2">➕</span>
             创建群组
@@ -92,17 +90,17 @@ export function GroupView() {
       </div>
 
       {/* 群组列表 */}
-      {groups.length === 0 ? (
-        <Card className="p-12 text-center">
+      {createdGroups.length === 0 ? (
+        <Card className="p-12 text-center max-w-2xl mx-auto mt-24">
           <div className="text-4xl mb-3">👥</div>
-          <p className="text-gray-400 mb-4">还没有群组</p>
+          <p className="text-gray-400 mb-4">还没有创建的群组</p>
           <Button onClick={createGroupModal.open} className="bg-orange-500 hover:bg-orange-600">
             创建第一个群组
           </Button>
         </Card>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {groups.map((group) => (
+          {createdGroups.map((group) => (
             <Card key={group.id} className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
@@ -169,11 +167,7 @@ export function GroupView() {
           }
           setConfirmDialog(null);
         }}
-        title={
-          confirmDialog?.type === "leave"
-            ? "确认退出群组"
-            : "确认解散群组"
-        }
+        title={confirmDialog?.type === "leave" ? "确认退出群组" : "确认解散群组"}
         description={
           confirmDialog?.type === "leave"
             ? `确定要退出群组"${confirmDialog.groupName}"吗？\n\n退出后，您将无法查看该群组的任务和信息。`

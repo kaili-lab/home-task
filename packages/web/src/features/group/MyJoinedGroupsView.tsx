@@ -2,24 +2,52 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useApp } from "@/contexts/AppContext";
+import { Input } from "@/components/ui/input";
+import { useApp, userGroupToGroup } from "@/contexts/AppContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { InviteCodeDisplay } from "@/features/group/InviteCodeDisplay";
 import { GroupMemberList } from "@/features/group/GroupMemberList";
-import { leaveGroup, deleteGroup } from "@/services/groups.api";
+import { leaveGroup, deleteGroup, joinGroup, getGroups } from "@/services/groups.api";
 import { showToastError, showToastSuccess } from "@/utils/toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-export function GroupView() {
-  const { groups, setGroups, createGroupModal } = useApp();
+export function MyJoinedGroupsView() {
+  const { groups, setGroups } = useApp();
   const { currentUser } = useCurrentUser();
+  const joinedGroups = groups.filter((g) => g.role === "member");
   const [loading, setLoading] = useState<number | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [joining, setJoining] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     type: "leave" | "delete";
     groupId: number;
     groupName: string;
   } | null>(null);
+
+  // 加入群组
+  const handleJoinGroup = async () => {
+    if (!inviteCode.trim()) {
+      showToastError("请输入邀请码");
+      return;
+    }
+
+    setJoining(true);
+    try {
+      await joinGroup(inviteCode.trim());
+      // 刷新群组列表
+      const userGroups = await getGroups();
+      const convertedGroups = userGroups.map(userGroupToGroup);
+      setGroups(convertedGroups);
+      setInviteCode("");
+      showToastSuccess("成功加入群组！");
+    } catch (error) {
+      console.error("加入群组失败:", error);
+      showToastError(error instanceof Error ? error.message : "加入群组失败，请稍后重试");
+    } finally {
+      setJoining(false);
+    }
+  };
 
   // 打开退出群组确认对话框
   const handleLeaveGroup = (groupId: number, groupName: string) => {
@@ -75,34 +103,42 @@ export function GroupView() {
 
   return (
     <section className="p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">家庭群组管理 👥</h2>
-          <p className="text-gray-500 text-sm mt-1">管理你的家庭群组和成员</p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" className="bg-white">
-            输入邀请码
-          </Button>
-          <Button onClick={createGroupModal.open} className="bg-orange-500 hover:bg-orange-600">
-            <span className="mr-2">➕</span>
-            创建群组
-          </Button>
-        </div>
+      <div className="mb-5">
+        <h2 className="text-2xl font-bold text-gray-800">我加入的群组 ➕</h2>
+        <p className="text-gray-500 text-sm mt-1">查看你加入的家庭群组</p>
       </div>
 
       {/* 群组列表 */}
-      {groups.length === 0 ? (
-        <Card className="p-12 text-center">
+      {joinedGroups.length === 0 ? (
+        <Card className="p-12 text-center max-w-2xl mx-auto mt-24">
           <div className="text-4xl mb-3">👥</div>
-          <p className="text-gray-400 mb-4">还没有群组</p>
-          <Button onClick={createGroupModal.open} className="bg-orange-500 hover:bg-orange-600">
-            创建第一个群组
-          </Button>
+          <p className="text-gray-400 mb-4">还没有加入的群组</p>
+          <p className="text-sm text-gray-500 mb-6">输入邀请码加入群组</p>
+          {/* 输入邀请码区域 */}
+          <div className="flex items-center gap-3 max-w-md mx-auto">
+            <Input
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              placeholder="输入邀请码"
+              className="flex-1"
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && !joining && inviteCode.trim()) {
+                  handleJoinGroup();
+                }
+              }}
+            />
+            <Button
+              onClick={handleJoinGroup}
+              disabled={!inviteCode.trim() || joining}
+              className="bg-orange-500 hover:bg-orange-600 whitespace-nowrap"
+            >
+              {joining ? "加入中..." : "加入群组"}
+            </Button>
+          </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {groups.map((group) => (
+          {joinedGroups.map((group) => (
             <Card key={group.id} className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
@@ -169,11 +205,7 @@ export function GroupView() {
           }
           setConfirmDialog(null);
         }}
-        title={
-          confirmDialog?.type === "leave"
-            ? "确认退出群组"
-            : "确认解散群组"
-        }
+        title={confirmDialog?.type === "leave" ? "确认退出群组" : "确认解散群组"}
         description={
           confirmDialog?.type === "leave"
             ? `确定要退出群组"${confirmDialog.groupName}"吗？\n\n退出后，您将无法查看该群组的任务和信息。`

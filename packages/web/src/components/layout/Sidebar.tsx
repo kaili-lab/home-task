@@ -1,7 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/hooks/useAuth";
-import type { Group } from "@/types";
 import { SidebarGroups } from "./SidebarGroups";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -10,17 +9,15 @@ import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   onCreateGroup: () => void;
-  groups: Group[];
 }
 
 const navItems: { path: string; icon: string; label: string }[] = [
   { path: "/today", icon: "📋", label: "今日任务" },
   { path: "/week", icon: "📅", label: "本周计划" },
   { path: "/ai", icon: "🤖", label: "AI助手" },
-  { path: "/group", icon: "👥", label: "群组管理" },
 ];
 
-export function Sidebar({ onCreateGroup, groups }: SidebarProps) {
+export function Sidebar({ onCreateGroup }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useCurrentUser();
@@ -86,7 +83,7 @@ export function Sidebar({ onCreateGroup, groups }: SidebarProps) {
 
         {/* Groups */}
         <div className="mt-4">
-          <SidebarGroups groups={groups} onCreateGroup={onCreateGroup} />
+          <SidebarGroups onCreateGroup={onCreateGroup} />
         </div>
       </nav>
 

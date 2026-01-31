@@ -23,7 +23,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { mockGroups } from "@/lib/mockData";
+import { useApp } from "@/contexts/AppContext";
 import { TaskFormRecurring } from "./TaskFormRecurring";
 import { TaskFormAssignees } from "./TaskFormAssignees";
 import type { Priority, RecurringRule } from "@/types";
@@ -35,6 +35,7 @@ interface CreateTaskModalProps {
 }
 
 export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalProps) {
+  const { groups } = useApp();
   const [taskType, setTaskType] = useState<"group" | "personal">("group");
   const [groupId, setGroupId] = useState("1");
   const [title, setTitle] = useState("");
@@ -111,7 +112,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockGroups.map((group) => (
+                  {groups.filter((g) => g.role === "owner" || g.role === "member").map((group) => (
                     <SelectItem key={group.id} value={String(group.id)}>
                       {group.icon} {group.name} {group.role === "owner" && "(群主)"}
                     </SelectItem>

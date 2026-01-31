@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { PageLoader } from "@/components/ui/page-loader";
 
 export function ResetPasswordView() {
   const navigate = useNavigate();
@@ -69,9 +70,7 @@ export function ResetPasswordView() {
     return (
       <div className="min-h-screen bg-linear-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md p-8 shadow-lg">
-          <div className="text-center">
-            <p className="text-gray-600">加载中...</p>
-          </div>
+          <PageLoader message="加载中..." />
         </Card>
       </div>
     );

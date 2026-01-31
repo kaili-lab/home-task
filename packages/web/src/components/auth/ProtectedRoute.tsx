@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { PageLoader } from "@/components/ui/page-loader";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -14,12 +15,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation();
 
   if (isLoading) {
-    // 可以显示加载状态
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!isAuthenticated) {

@@ -28,4 +28,5 @@ export interface UserGroup {
   role: string; // owner | member
   joinedAt: Date;
   createdAt: Date;
+  memberCount?: number; // 成员数量（可选，向后兼容）
 }
