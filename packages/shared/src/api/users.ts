@@ -2,7 +2,7 @@
 
 // 更新用户输入类型
 export interface UpdateUserInput {
-  nickname?: string;
+  name?: string;
   avatar?: string;
   defaultGroupId?: number | null;
 }
@@ -11,7 +11,7 @@ export interface UpdateUserInput {
 export interface UserInfo {
   id: number;
   email: string;
-  nickname: string | null;
+  name: string | null; // 用户昵称（显示名称）
   avatar: string | null;
   role: string;
   defaultGroupId: number | null;

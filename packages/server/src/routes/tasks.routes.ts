@@ -94,7 +94,7 @@ const updateTaskSchema = z.object({
 
 // 更新任务状态的Zod Schema
 const updateTaskStatusSchema = z.object({
-  status: z.enum(["pending", "completed", "cancelled", "in_progress"]),
+  status: z.enum(["pending", "completed", "cancelled"]),
 });
 
 /**
@@ -146,7 +146,7 @@ tasksRoutes.get("/", async (c) => {
 
     const filters: Parameters<TaskService["getTasks"]>[1] = {};
 
-    if (status && ["pending", "completed", "cancelled", "in_progress"].includes(status)) {
+    if (status && ["pending", "completed", "cancelled"].includes(status)) {
       filters.status = status;
     }
 

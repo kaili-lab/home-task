@@ -20,11 +20,11 @@ const group = await db.select().from(groups).where(eq(groups.id, task.groupId));
 const task = await db.query.tasks.findFirst({
   where: eq(tasks.id, 1),
   with: {
-    creator: { columns: { nickname: true } },
+    creator: { columns: { name: true } },
     group: { columns: { name: true } },
   },
 });
-// task.creator.nickname 和 task.group.name 都有了
+// task.creator.name 和 task.group.name 都有了
 ```
 
 ### 2. 类型安全
@@ -50,8 +50,9 @@ import { relations } from "drizzle-orm";
 
 // 一对多关系
 export const usersRelations = relations(users, ({ many, one }) => ({
-  tasks: many(tasks),  // 一个用户有多个任务
-  defaultGroup: one(groups, {  // 一个用户有一个默认群组
+  tasks: many(tasks), // 一个用户有多个任务
+  defaultGroup: one(groups, {
+    // 一个用户有一个默认群组
     fields: [users.defaultGroupId],
     references: [groups.id],
   }),
@@ -62,7 +63,7 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
   creator: one(users, {
     fields: [tasks.createdBy],
     references: [users.id],
-    relationName: "createdBy",  // 用于区分多个关系
+    relationName: "createdBy", // 用于区分多个关系
   }),
 }));
 ```
@@ -75,7 +76,7 @@ const task = await db.query.tasks.findFirst({
   where: eq(tasks.id, 1),
   with: {
     creator: {
-      columns: { nickname: true, email: true },
+      columns: { name: true, email: true },
     },
     group: {
       columns: { name: true },
@@ -87,7 +88,7 @@ const task = await db.query.tasks.findFirst({
 const user = await db.query.users.findFirst({
   where: eq(users.id, 1),
   with: {
-    createdTasks: true,  // 获取所有创建的任务
+    createdTasks: true, // 获取所有创建的任务
   },
 });
 ```

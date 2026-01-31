@@ -235,12 +235,12 @@ export class TaskService {
     const userMap = new Map<number, string | null>();
     if (userIds.size > 0) {
       const userList = await this.db
-        .select({ id: users.id, nickname: users.nickname })
+        .select({ id: users.id, name: users.name })
         .from(users)
         .where(inArray(users.id, Array.from(userIds)));
 
       userList.forEach((user) => {
-        userMap.set(user.id, user.nickname || null);
+        userMap.set(user.id, user.name || null);
       });
     }
 
@@ -339,25 +339,25 @@ export class TaskService {
 
     const creator = await this.db.query.users.findFirst({
       where: eq(users.id, task.createdBy),
-      columns: { nickname: true },
+      columns: { name: true },
     });
 
     // 批量查询被分配者
     let assignedNames: string[] = [];
     if (assignedIds.length > 0) {
       const assignees = await this.db
-        .select({ id: users.id, nickname: users.nickname })
+        .select({ id: users.id, name: users.name })
         .from(users)
         .where(inArray(users.id, assignedIds));
       assignedNames = assignees
-        .map((u) => u.nickname)
+        .map((u) => u.name)
         .filter((name): name is string => name !== null && name !== undefined);
     }
 
     const completer = task.completedBy
       ? await this.db.query.users.findFirst({
           where: eq(users.id, task.completedBy),
-          columns: { nickname: true },
+          columns: { name: true },
         })
       : null;
 
@@ -370,11 +370,11 @@ export class TaskService {
       groupId: task.groupId,
       groupName: group?.name || null,
       createdBy: task.createdBy,
-      createdByName: creator?.nickname || null,
+      createdByName: creator?.name || null,
       assignedToIds: assignedIds,
       assignedToNames: assignedNames,
       completedBy: task.completedBy,
-      completedByName: completer?.nickname || null,
+      completedByName: completer?.name || null,
       completedAt: task.completedAt,
       dueDate: task.dueDate,
       startTime: task.startTime,

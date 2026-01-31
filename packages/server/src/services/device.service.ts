@@ -199,10 +199,8 @@ export class DeviceService {
       taskList = await this.db.select().from(tasks).where(eq(tasks.groupId, device.groupId));
     }
 
-    // 只返回pending和in_progress状态的任务
-    const filteredTasks = taskList.filter(
-      (task) => task.status === "pending" || task.status === "in_progress",
-    );
+    // 只返回pending状态的任务
+    const filteredTasks = taskList.filter((task) => task.status === "pending");
 
     return filteredTasks.map((task) => ({
       id: task.id,

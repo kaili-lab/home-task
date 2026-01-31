@@ -1,7 +1,7 @@
 // 通用类型定义
 
 // 任务状态枚举
-export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
+export type TaskStatus = "pending" | "completed" | "cancelled";
 
 // 任务来源枚举
 export type TaskSource = "ai" | "human";
@@ -9,9 +9,12 @@ export type TaskSource = "ai" | "human";
 // 优先级枚举
 export type Priority = "high" | "medium" | "low";
 
+// 重复频率类型
+export type RecurringFreq = "daily" | "weekly" | "monthly";
+
 // 重复规则类型
 export type RecurringRule = {
-  freq: "daily" | "weekly" | "monthly";
+  freq: RecurringFreq;
   interval: number; // 间隔（如每2周 = interval: 2）
   startDate: string; // 开始日期 YYYY-MM-DD（必填）
 

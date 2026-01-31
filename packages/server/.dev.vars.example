@@ -5,6 +5,8 @@ DATABASE_URL=
 BETTER_AUTH_SECRET=your-secret-key-here
 BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
 
+RESEND_API_KEY=your-api-key-here
+
 AIHUBMIX_API_KEY=your-api-key-here
 
 # 前端地址（用于 Stripe 支付回调）

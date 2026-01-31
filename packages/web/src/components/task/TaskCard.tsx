@@ -1,0 +1,106 @@
+import type { Task, TaskStatus, Priority } from "@/types";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { TaskAssignees } from "./TaskAssignees";
+import { RecurringIndicator } from "./RecurringIndicator";
+import { mockUsers } from "@/lib/mockData";
+
+interface TaskCardProps {
+  task: Task;
+  onToggle: (taskId: number) => void;
+}
+
+const priorityColors: Record<Priority, string> = {
+  low: "bg-green-500",
+  medium: "bg-orange-500",
+  high: "bg-red-500",
+};
+
+const statusStyles: Record<TaskStatus, string> = {
+  pending: "bg-yellow-100 text-yellow-700",
+  completed: "bg-green-100 text-green-700",
+  cancelled: "bg-red-100 text-red-700",
+};
+
+export function TaskCard({ task, onToggle }: TaskCardProps) {
+  const isCompleted = task.status === "completed";
+  const assignees = mockUsers.filter((u) => task.assignedTo.includes(u.id));
+  const completedByUser = task.completedBy
+    ? mockUsers.find((u) => u.id === task.completedBy)
+    : null;
+
+  const formatTime = () => {
+    if (task.isAllDay) return "全天";
+    if (task.startTime && task.endTime) return `${task.startTime}-${task.endTime}`;
+    if (task.startTime) return `${task.startTime}前`;
+    return "";
+  };
+
+  return (
+    <div
+      className={cn(
+        "task-card bg-white rounded-xl p-4 border border-gray-100 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5",
+        isCompleted && "opacity-60",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <Checkbox
+          checked={isCompleted}
+          onCheckedChange={() => onToggle(task.id)}
+          className="mt-1"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h4
+              className={cn(
+                "font-medium text-gray-800",
+                isCompleted && "line-through text-gray-500",
+              )}
+            >
+              {task.title}
+            </h4>
+            <span
+              className={cn("w-2.5 h-2.5 rounded-full", priorityColors[task.priority])}
+              title={`${task.priority}优先级`}
+            />
+            {task.priority === "high" && (
+              <Badge variant="destructive" className="text-xs">
+                紧急
+              </Badge>
+            )}
+            {task.isRecurring && <RecurringIndicator rule={task.recurringRule} />}
+          </div>
+
+          {task.description && (
+            <p
+              className={cn(
+                "text-sm text-gray-500 mb-2",
+                isCompleted && "line-through text-gray-400",
+              )}
+            >
+              {task.description}
+            </p>
+          )}
+
+          <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+            <span>📅 今天 {formatTime()}</span>
+            {task.source === "ai" && (
+              <Badge variant="secondary" className="bg-purple-100 text-purple-600">
+                🤖 AI创建
+              </Badge>
+            )}
+            <Badge className={statusStyles[task.status]}>
+              {task.status === "pending" && "待办"}
+              {task.status === "completed" && "已完成"}
+              {task.status === "cancelled" && "已取消"}
+            </Badge>
+            {completedByUser && <span>✅ 由 {completedByUser.name} 完成</span>}
+          </div>
+        </div>
+
+        {assignees.length > 0 && <TaskAssignees users={assignees} />}
+      </div>
+    </div>
+  );
+}

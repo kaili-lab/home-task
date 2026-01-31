@@ -1,9 +1,11 @@
 import { betterAuth } from "better-auth";
+import { username } from "better-auth/plugins";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createDb } from "../db/db";
 import * as schema from "../db/schema";
 import { type Bindings } from "../types/bindings";
 import { getEnv } from "../utils/env";
+import { EmailService } from "../services/email.service";
 
 /**
  * 创建 Better Auth 实例
@@ -19,6 +21,9 @@ export const createAuth = (env: Bindings) => {
 
   // 为 Better Auth 创建专用的 db 实例
   const db = createDb(config.DATABASE_URL);
+
+  // 创建邮件服务实例
+  const emailService = new EmailService(config.RESEND_API_KEY);
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -39,6 +44,12 @@ export const createAuth = (env: Bindings) => {
     advanced: {
       database: {
         useNumberId: true, // 🎯 关键配置：使用数字自增 ID
+      },
+      // 🌐 IP 地址配置：用于速率限制和会话安全
+      // Cloudflare Workers 使用 CF-Connecting-IP 头获取真实 IP
+      ipAddress: {
+        ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"], // 优先使用 Cloudflare 的 IP 头
+        ipv6Subnet: 64, // IPv6 子网限制（防止通过切换 IPv6 地址绕过限制）
       },
     },
 
@@ -72,14 +83,48 @@ export const createAuth = (env: Bindings) => {
     // 启用后自动提供的 API：
     // POST /api/auth/signup - 注册（邮箱+密码）
     // POST /api/auth/signin/email - 登录
-    // POST /api/auth/forget-password - 忘记密码（触发发送邮件）
+    // POST /api/auth/signin/username - 用户名登录
+    // POST /api/auth/request-password-reset - 请求密码重置（触发发送邮件）
     // POST /api/auth/reset-password - 重置密码
     emailAndPassword: {
-      enabled: true, // 启用邮箱密码登录
-      requireEmailVerification: true, // 要求邮箱验证（注册后需验证才能登录）
+      enabled: true, // 启用邮箱密码登录（用于注册时提供邮箱）
+      requireEmailVerification: true, // 启用邮箱验证
       minPasswordLength: 6,
       maxPasswordLength: 20,
+      // 🔑 密码重置邮件发送配置
+      sendResetPassword: async (
+        {
+          user,
+          url,
+          token,
+        }: { user: { email: string; name?: string | null }; url: string; token: string },
+        request?: Request,
+      ) => {
+        await emailService.sendPasswordResetEmailForAuth({ user, url, token }, request);
+      },
     },
+
+    // 📧 邮箱验证配置
+    emailVerification: {
+      sendVerificationEmail: async ({ user, url, token }, request) => {
+        // 添加 callbackURL 参数，指向前端验证页面
+        const frontendUrl = config.FRONTEND_URL || "http://localhost:5173";
+        const callbackURL = `${frontendUrl}/verify-email`;
+        const verificationUrl = url.includes("callbackURL")
+          ? url
+          : `${url}${url.includes("?") ? "&" : "?"}callbackURL=${encodeURIComponent(callbackURL)}`;
+
+        await emailService.sendVerificationEmailForAuth(
+          { user, url: verificationUrl, token },
+          request,
+        );
+      },
+      sendOnSignUp: true, // 注册时自动发送验证邮件
+    },
+
+    // 🔑 用户名插件配置
+    // 启用用户名登录功能
+    plugins: [username()],
 
     // Google OAuth 配置
     google: {
@@ -93,6 +138,5 @@ export const createAuth = (env: Bindings) => {
       expiresIn: 60 * 60 * 24 * 7, // 7 天
       updateAge: 60 * 60 * 24, // 每天更新一次
     },
-
   });
 };

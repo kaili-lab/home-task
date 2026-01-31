@@ -1,11 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { users, groupUsers, groups } from "../db/schema";
-import type {
-  UpdateUserInput,
-  UserInfo,
-  UserGroup,
-} from "shared";
+import type { UpdateUserInput, UserInfo, UserGroup } from "shared";
 
 /**
  * 用户Service层
@@ -23,7 +19,7 @@ export class UserService {
       columns: {
         id: true,
         email: true,
-        nickname: true,
+        name: true, // 用户昵称（显示名称）
         avatar: true,
         role: true,
         defaultGroupId: true,
@@ -39,7 +35,7 @@ export class UserService {
     return {
       id: user.id,
       email: user.email,
-      nickname: user.nickname || null,
+      name: user.name || null, // 用户昵称（显示名称）
       avatar: user.avatar || null,
       role: user.role || "user",
       defaultGroupId: user.defaultGroupId || null,
@@ -54,8 +50,8 @@ export class UserService {
   async updateUser(userId: number, data: UpdateUserInput): Promise<UserInfo> {
     const updateData: Partial<typeof users.$inferInsert> = {};
 
-    if (data.nickname !== undefined) {
-      updateData.nickname = data.nickname;
+    if (data.name !== undefined) {
+      updateData.name = data.name;
     }
     if (data.avatar !== undefined) {
       updateData.avatar = data.avatar;
@@ -67,7 +63,7 @@ export class UserService {
           where: and(
             eq(groupUsers.groupId, data.defaultGroupId),
             eq(groupUsers.userId, userId),
-            eq(groupUsers.status, "active")
+            eq(groupUsers.status, "active"),
           ),
         });
 
@@ -87,7 +83,7 @@ export class UserService {
       .returning({
         id: users.id,
         email: users.email,
-        nickname: users.nickname,
+        name: users.name, // 用户昵称（显示名称）
         avatar: users.avatar,
         role: users.role,
         defaultGroupId: users.defaultGroupId,
@@ -102,7 +98,7 @@ export class UserService {
     return {
       id: updatedUser.id,
       email: updatedUser.email,
-      nickname: updatedUser.nickname || null,
+      name: updatedUser.name || null, // 用户昵称（显示名称）
       avatar: updatedUser.avatar || null,
       role: updatedUser.role || "user",
       defaultGroupId: updatedUser.defaultGroupId || null,

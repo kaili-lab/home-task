@@ -14,7 +14,7 @@ const usersRoutes = new Hono<{
 
 // 更新用户信息的Zod Schema
 const updateUserSchema = z.object({
-  nickname: z.string().min(1).max(50).optional(),
+  name: z.string().min(1).max(50).optional(),
   avatar: z.string().url().optional().or(z.literal("")),
   defaultGroupId: z.number().int().positive().nullable().optional(),
 });
@@ -38,7 +38,7 @@ usersRoutes.get("/me", async (c) => {
           success: false,
           error: "用户不存在",
         },
-        404
+        404,
       );
     }
 
@@ -52,25 +52,21 @@ usersRoutes.get("/me", async (c) => {
  * PATCH /api/users/me
  * 更新当前用户信息
  */
-usersRoutes.patch(
-  "/me",
-  zValidator("json", updateUserSchema),
-  async (c) => {
-    try {
-      const session = c.get("session");
-      const db = c.get("db");
-      const userId = getUserId(session);
-      const data = c.req.valid("json");
+usersRoutes.patch("/me", zValidator("json", updateUserSchema), async (c) => {
+  try {
+    const session = c.get("session");
+    const db = c.get("db");
+    const userId = getUserId(session);
+    const data = c.req.valid("json");
 
-      const userService = new UserService(db);
-      const updatedUser = await userService.updateUser(userId, data);
+    const userService = new UserService(db);
+    const updatedUser = await userService.updateUser(userId, data);
 
-      return c.json(successResponse(updatedUser));
-    } catch (error) {
-      return handleServiceError(c, error);
-    }
+    return c.json(successResponse(updatedUser));
+  } catch (error) {
+    return handleServiceError(c, error);
   }
-);
+});
 
 /**
  * GET /api/users/me/groups

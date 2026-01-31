@@ -9,7 +9,6 @@ import { requireAuth } from "./middleware/require-auth.middleware";
 import usersRoutes from "./routes/users.routes";
 import groupsRoutes from "./routes/groups.routes";
 import tasksRoutes from "./routes/tasks.routes";
-import aiRoutes from "./routes/ai.routes";
 import devicesRoutes from "./routes/devices.routes";
 import { DeviceService } from "./services/device.service";
 import { successResponse } from "./utils/route-helpers";
@@ -24,7 +23,7 @@ app.use(
   cors({
     origin: ["http://localhost:5173"],
     credentials: true, // 支持 cookies
-  })
+  }),
 );
 
 // 数据库和认证中间件
@@ -62,7 +61,7 @@ app.get("/api/devices/:deviceId/tasks", async (c) => {
           success: false,
           error: "设备ID不能为空",
         },
-        400
+        400,
       );
     }
 
@@ -73,7 +72,7 @@ app.get("/api/devices/:deviceId/tasks", async (c) => {
       successResponse({
         tasks,
         lastUpdated: new Date().toISOString(),
-      })
+      }),
     );
   } catch (error) {
     return handleServiceError(c, error);
@@ -85,7 +84,7 @@ app.use("/api/*", requireAuth);
 app.route("/api/users", usersRoutes);
 app.route("/api/groups", groupsRoutes);
 app.route("/api/tasks", tasksRoutes);
-app.route("/api/ai", aiRoutes);
+// app.route("/api/ai", aiRoutes);
 app.route("/api/devices", devicesRoutes);
 
 export default app;

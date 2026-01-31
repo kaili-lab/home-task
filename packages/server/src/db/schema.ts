@@ -19,12 +19,7 @@ import { relations } from "drizzle-orm";
 // 注意：所有枚举必须在表定义之前声明
 
 // 任务状态枚举
-export const taskStatusEnum = pgEnum("task_status", [
-  "pending",
-  "in_progress",
-  "completed",
-  "cancelled",
-]);
+export const taskStatusEnum = pgEnum("task_status", ["pending", "completed", "cancelled"]);
 
 // 任务来源枚举
 export const taskSourceEnum = pgEnum("task_source", ["ai", "human"]);
@@ -45,14 +40,15 @@ export const users = pgTable("user", {
   id: serial("id").primaryKey(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: boolean("emailVerified").notNull().default(false),
-  name: varchar("name", { length: 255 }),
+  name: varchar("name", { length: 255 }), // 用户昵称（显示名称）
   image: varchar("image", { length: 500 }), // Better Auth映射为avatarUrl
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 
   // 业务字段
   phone: varchar("phone", { length: 20 }),
-  nickname: varchar("nickname", { length: 50 }),
+  username: varchar("username", { length: 50 }),
+  displayUsername: varchar("displayUsername", { length: 50 }), // Better Auth username插件需要
   avatar: text("avatar"),
   role: varchar("role", { length: 20 }).notNull().default("user"), // admin / user
   defaultGroupId: integer("defaultGroupId"), // [FK] 外键 -> groups.id，语音创建任务时的默认归属
@@ -65,6 +61,8 @@ export const sessions = pgTable("session", {
   userId: integer("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  ipAddress: varchar("ipAddress", { length: 45 }), // Better Auth 1.4+ 必需字段：用于速率限制和会话安全（IPv4最多15字符，IPv6最多45字符）
+  userAgent: text("userAgent"), // Better Auth 1.4+ 必需字段：存储请求的 User-Agent 头信息
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
@@ -134,7 +132,7 @@ export const tasks = pgTable("tasks", {
   // 基本信息
   title: varchar("title", { length: 200 }).notNull(),
   description: text("description"),
-  status: taskStatusEnum("status").notNull().default("pending"), // pending/completed/cancelled/template
+  status: taskStatusEnum("status").notNull().default("pending"), // pending/completed/cancelled
   priority: priorityEnum("priority").notNull().default("medium"),
 
   // 时间字段（startTime/endTime 为 NULL = 全天任务）

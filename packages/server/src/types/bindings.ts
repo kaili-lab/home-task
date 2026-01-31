@@ -17,8 +17,11 @@ export type Bindings = {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
 
-  // 前端地址（用于支付回调）
+  // 前端地址
   FRONTEND_URL?: string;
+
+  // Resend API 配置
+  RESEND_API_KEY: string;
 
   // 服务器配置（可选）
   PORT?: string;

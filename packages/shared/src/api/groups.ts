@@ -26,7 +26,7 @@ export interface GroupInfo {
 export interface GroupDetail extends GroupInfo {
   members: Array<{
     userId: number;
-    nickname: string | null;
+    name: string | null;
     role: string;
     joinedAt: Date;
   }>;

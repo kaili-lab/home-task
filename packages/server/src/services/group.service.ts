@@ -1,12 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { groups, groupUsers, users } from "../db/schema";
-import type {
-  CreateGroupInput,
-  UpdateGroupInput,
-  GroupInfo,
-  GroupDetail,
-} from "shared";
+import type { CreateGroupInput, UpdateGroupInput, GroupInfo, GroupDetail } from "shared";
 
 /**
  * 生成唯一邀请码（4-6位数字）
@@ -84,7 +79,7 @@ export class GroupService {
       where: and(
         eq(groupUsers.groupId, groupId),
         eq(groupUsers.userId, userId),
-        eq(groupUsers.status, "active")
+        eq(groupUsers.status, "active"),
       ),
     });
 
@@ -105,7 +100,7 @@ export class GroupService {
     const members = await this.db
       .select({
         userId: groupUsers.userId,
-        nickname: users.nickname,
+        name: users.name,
         role: groupUsers.role,
         joinedAt: groupUsers.joinedAt,
       })
@@ -122,7 +117,7 @@ export class GroupService {
       updatedAt: group.updatedAt,
       members: members.map((m) => ({
         userId: m.userId,
-        nickname: m.nickname || null,
+        name: m.name || null,
         role: m.role,
         joinedAt: m.joinedAt,
       })),
@@ -167,7 +162,7 @@ export class GroupService {
         eq(groupUsers.groupId, groupId),
         eq(groupUsers.userId, ownerId),
         eq(groupUsers.role, "owner"),
-        eq(groupUsers.status, "active")
+        eq(groupUsers.status, "active"),
       ),
     });
 
@@ -219,10 +214,7 @@ export class GroupService {
 
     // 检查是否已加入
     const existing = await this.db.query.groupUsers.findFirst({
-      where: and(
-        eq(groupUsers.groupId, group.id),
-        eq(groupUsers.userId, userId)
-      ),
+      where: and(eq(groupUsers.groupId, group.id), eq(groupUsers.userId, userId)),
     });
 
     if (existing) {
@@ -265,7 +257,7 @@ export class GroupService {
         eq(groupUsers.groupId, groupId),
         eq(groupUsers.userId, ownerId),
         eq(groupUsers.role, "owner"),
-        eq(groupUsers.status, "active")
+        eq(groupUsers.status, "active"),
       ),
     });
 
@@ -278,7 +270,7 @@ export class GroupService {
       where: and(
         eq(groupUsers.groupId, groupId),
         eq(groupUsers.userId, targetUserId),
-        eq(groupUsers.status, "active")
+        eq(groupUsers.status, "active"),
       ),
     });
 
@@ -294,12 +286,7 @@ export class GroupService {
     // 删除成员记录
     await this.db
       .delete(groupUsers)
-      .where(
-        and(
-          eq(groupUsers.groupId, groupId),
-          eq(groupUsers.userId, targetUserId)
-        )
-      );
+      .where(and(eq(groupUsers.groupId, groupId), eq(groupUsers.userId, targetUserId)));
   }
 
   /**
@@ -310,7 +297,7 @@ export class GroupService {
       where: and(
         eq(groupUsers.groupId, groupId),
         eq(groupUsers.userId, userId),
-        eq(groupUsers.status, "active")
+        eq(groupUsers.status, "active"),
       ),
     });
 
@@ -326,12 +313,7 @@ export class GroupService {
     // 删除成员记录
     await this.db
       .delete(groupUsers)
-      .where(
-        and(
-          eq(groupUsers.groupId, groupId),
-          eq(groupUsers.userId, userId)
-        )
-      );
+      .where(and(eq(groupUsers.groupId, groupId), eq(groupUsers.userId, userId)));
   }
 
   /**
@@ -344,7 +326,7 @@ export class GroupService {
         eq(groupUsers.groupId, groupId),
         eq(groupUsers.userId, ownerId),
         eq(groupUsers.role, "owner"),
-        eq(groupUsers.status, "active")
+        eq(groupUsers.status, "active"),
       ),
     });
 
