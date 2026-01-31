@@ -19,6 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
 import { mockGroups } from "@/lib/mockData";
 import { TaskFormRecurring } from "./TaskFormRecurring";
 import { TaskFormAssignees } from "./TaskFormAssignees";
@@ -47,6 +51,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
     startDate: "",
   });
   const [assignedTo, setAssignedTo] = useState<number[]>([1]);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   const handleSubmit = () => {
     const taskData = {
@@ -72,7 +77,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>新建任务</DialogTitle>
         </DialogHeader>
@@ -102,13 +107,13 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
             <div>
               <Label>选择群组</Label>
               <Select value={groupId} onValueChange={setGroupId}>
-                <SelectTrigger>
+                <SelectTrigger className="mt-2">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {mockGroups.map((group) => (
                     <SelectItem key={group.id} value={String(group.id)}>
-                      {group.icon} {group.name} {group.isDefault && "(默认)"}
+                      {group.icon} {group.name} {group.role === "owner" && "(群主)"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -123,6 +128,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="输入任务标题..."
+              className="mt-2"
             />
           </div>
 
@@ -134,14 +140,41 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
               onChange={(e) => setDescription(e.target.value)}
               placeholder="补充详情..."
               rows={2}
+              className="mt-2"
             />
           </div>
 
           {/* 日期和时间 */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4">
             <div>
               <Label>日期</Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal mt-2"
+                  >
+                    {dueDate ? (
+                      format(new Date(dueDate), "yyyy年M月d日")
+                    ) : (
+                      <span className="text-muted-foreground">选择日期</span>
+                    )}
+                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dueDate ? new Date(dueDate) : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        setDueDate(format(date, "yyyy-MM-dd"));
+                        setDatePickerOpen(false);
+                      }
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label className="flex items-center gap-2 mb-2">
@@ -153,9 +186,19 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
                   <Input
                     type="time"
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
+                    onChange={(e) => {
+                      setStartTime(e.target.value);
+                      e.target.blur();
+                    }}
                   />
-                  <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                  <Input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => {
+                      setEndTime(e.target.value);
+                      e.target.blur();
+                    }}
+                  />
                 </div>
               )}
             </div>

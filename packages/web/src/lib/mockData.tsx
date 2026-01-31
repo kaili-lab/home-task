@@ -32,6 +32,121 @@ export const mockUsers: User[] = [
     initials: "S",
     color: "from-purple-400 to-purple-500",
   },
+  // 登山俱乐部成员
+  {
+    id: 5,
+    name: "张峰",
+    email: "zhangfeng@example.com",
+    initials: "ZF",
+    color: "from-green-400 to-green-500",
+  },
+  {
+    id: 6,
+    name: "李雪",
+    email: "lixue@example.com",
+    initials: "LX",
+    color: "from-cyan-400 to-cyan-500",
+  },
+  {
+    id: 7,
+    name: "王强",
+    email: "wangqiang@example.com",
+    initials: "WQ",
+    color: "from-teal-400 to-teal-500",
+  },
+  {
+    id: 8,
+    name: "陈晨",
+    email: "chenchen@example.com",
+    initials: "CC",
+    color: "from-amber-400 to-amber-500",
+  },
+  {
+    id: 9,
+    name: "赵敏",
+    email: "zhaomin@example.com",
+    initials: "ZM",
+    color: "from-rose-400 to-rose-500",
+  },
+  // 美食分享成员
+  {
+    id: 10,
+    name: "刘美食",
+    email: "liumeishi@example.com",
+    initials: "LM",
+    color: "from-yellow-400 to-yellow-500",
+  },
+  {
+    id: 11,
+    name: "周大厨",
+    email: "zhoudachu@example.com",
+    initials: "ZD",
+    color: "from-red-400 to-red-500",
+  },
+  {
+    id: 12,
+    name: "吴吃货",
+    email: "wuchihuo@example.com",
+    initials: "WC",
+    color: "from-indigo-400 to-indigo-500",
+  },
+  {
+    id: 13,
+    name: "郑甜品",
+    email: "zhengtianpin@example.com",
+    initials: "ZT",
+    color: "from-fuchsia-400 to-fuchsia-500",
+  },
+  // 周末骑行成员
+  {
+    id: 14,
+    name: "孙骑士",
+    email: "sunqishi@example.com",
+    initials: "SQ",
+    color: "from-lime-400 to-lime-500",
+  },
+  {
+    id: 15,
+    name: "马速度",
+    email: "masudu@example.com",
+    initials: "MS",
+    color: "from-emerald-400 to-emerald-500",
+  },
+  {
+    id: 16,
+    name: "杨飞轮",
+    email: "yangfeilun@example.com",
+    initials: "YF",
+    color: "from-sky-400 to-sky-500",
+  },
+  {
+    id: 17,
+    name: "徐风行",
+    email: "xufengxing@example.com",
+    initials: "XF",
+    color: "from-violet-400 to-violet-500",
+  },
+  {
+    id: 18,
+    name: "林畅行",
+    email: "linchangxing@example.com",
+    initials: "LC",
+    color: "from-orange-400 to-orange-500",
+  },
+  {
+    id: 19,
+    name: "胡极速",
+    email: "hujisu@example.com",
+    initials: "HJ",
+    color: "from-pink-400 to-pink-500",
+  },
+  {
+    id: 20,
+    name: "谢单车",
+    email: "xiedanche@example.com",
+    initials: "XD",
+    color: "from-slate-400 to-slate-500",
+  },
 ];
 
 export const mockGroups: Group[] = [
@@ -39,19 +154,43 @@ export const mockGroups: Group[] = [
     id: 1,
     name: "温馨小家",
     icon: "🏠",
-    isDefault: true,
-    memberCount: 4,
+    role: "owner",
+    memberCount: 3,
     inviteCode: "8859",
   },
   {
     id: 2,
     name: "登山俱乐部",
     icon: "⛰️",
-    isDefault: false,
-    memberCount: 12,
+    role: "member",
+    memberCount: 6,
     inviteCode: "6677",
   },
+  {
+    id: 3,
+    name: "美食分享",
+    icon: "🍜",
+    role: "owner",
+    memberCount: 5,
+    inviteCode: "3344",
+  },
+  {
+    id: 4,
+    name: "周末骑行",
+    icon: "🚴",
+    role: "owner",
+    memberCount: 8,
+    inviteCode: "9921",
+  },
 ];
+
+// 群组成员映射表：groupId -> userIds（第一个成员为群主）
+export const mockGroupMembers: Record<number, number[]> = {
+  1: [1, 2, 3], // 温馨小家：Kai(群主), Mom, Dad
+  2: [5, 1, 6, 7, 8, 9], // 登山俱乐部：张峰(群主) + Kai和其他登山爱好者
+  3: [1, 10, 11, 12, 13], // 美食分享：Kai(群主) + 4个美食爱好者
+  4: [1, 14, 15, 16, 17, 18, 19, 20], // 周末骑行：Kai(群主) + 7个骑行爱好者
+};
 
 export const mockTasks: Task[] = [
   // 添加本周其他日期的任务

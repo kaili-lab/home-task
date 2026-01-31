@@ -2,6 +2,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api-client";
 import type {
   GroupInfo,
   GroupDetail,
+  UserGroup,
   CreateGroupInput,
   UpdateGroupInput,
 } from "shared";
@@ -16,9 +17,10 @@ export async function createGroup(data: CreateGroupInput) {
 
 /**
  * 获取我的群组列表
+ * 返回 UserGroup[]，包含当前用户在群组中的角色信息
  */
 export async function getGroups() {
-  const response = await apiGet<{ groups: GroupInfo[] }>("/api/groups");
+  const response = await apiGet<{ groups: UserGroup[] }>("/api/groups");
   return response.data.groups;
 }
 

@@ -1,4 +1,5 @@
 import type { TaskStatus, Priority, TaskSource, RecurringRule } from "shared";
+import type { UserGroup } from "shared";
 export type { TaskStatus, Priority, TaskSource, RecurringFreq, RecurringRule } from "shared";
 
 export interface Task {
@@ -34,13 +35,12 @@ export interface User {
   color: string;
 }
 
-export interface Group {
-  id: number;
-  name: string;
-  icon: string;
-  isDefault: boolean;
-  memberCount: number;
-  inviteCode?: string;
+// 前端扩展的群组类型，基于 UserGroup 添加前端显示需要的字段
+export interface Group extends Omit<UserGroup, "joinedAt" | "createdAt"> {
+  icon: string; // 前端显示用的图标
+  memberCount: number; // 成员数量
+  createdAt?: string; // 可选，兼容 mock 数据
+  updatedAt?: string; // 可选，兼容 mock 数据
 }
 
 export interface ChatMessage {

@@ -17,7 +17,7 @@ export function InviteCodeDisplay({ inviteCode }: InviteCodeDisplayProps) {
   };
 
   return (
-    <div className="bg-orange-50 rounded-lg p-4 mb-4">
+    <div className="bg-orange-50 rounded-lg p-3 mb-3">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="text-sm text-gray-600 mb-2">邀请码（分享给家人加入）</p>
