@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
-import { useTaskList } from "@/hooks/useTaskList";
+import { useQueries } from "@tanstack/react-query";
+import { useTaskListByGroup } from "@/hooks/useTaskList";
+import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { DayGroup } from "./DayGroup";
 import { DayGroupSkeleton } from "./DayGroupSkeleton";
@@ -8,13 +11,44 @@ import { CreateTaskModal } from "@/features/task/CreateTaskModal";
 import { updateTaskStatus, deleteTask, updateTask } from "@/services/tasks.api";
 import { showToastError, showToastSuccess } from "@/utils/toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import type { TaskStatus, Task } from "@/types";
+import { getTasks } from "@/services/tasks.api";
+import type { TaskInfo } from "shared";
+import type { TaskStatus, Task, Group } from "@/types";
 
 interface WeekViewProps {
   onCreateTask: () => void;
 }
 
+// 将 TaskInfo 转换为 Task 类型
+function taskInfoToTask(taskInfo: TaskInfo): Task {
+  return {
+    id: taskInfo.id,
+    title: taskInfo.title,
+    description: taskInfo.description || undefined,
+    status: taskInfo.status,
+    priority: taskInfo.priority,
+    dueDate: taskInfo.dueDate || undefined,
+    startTime: taskInfo.startTime || undefined,
+    endTime: taskInfo.endTime || undefined,
+    isAllDay: !taskInfo.startTime && !taskInfo.endTime,
+    groupId: taskInfo.groupId || undefined,
+    createdBy: taskInfo.createdBy,
+    assignedTo: taskInfo.assignedToIds,
+    completedBy: taskInfo.completedBy || undefined,
+    completedAt: taskInfo.completedAt || undefined,
+    source: taskInfo.source,
+    isRecurring: taskInfo.isRecurring,
+    recurringRule: taskInfo.recurringRule || undefined,
+    recurringParentId: taskInfo.recurringParentId || undefined,
+    createdAt: taskInfo.createdAt,
+    updatedAt: taskInfo.updatedAt,
+  };
+}
+
 export function WeekView({ onCreateTask }: WeekViewProps) {
+  const { groups } = useApp();
+  const { user } = useAuth();
+
   // 获取本周日期范围（周一到周日）
   const weekDays = useMemo(() => {
     const today = new Date();
@@ -44,11 +78,68 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
     };
   }, [weekDays]);
 
-  // 使用日期范围查询任务
-  const { tasks, loading, refetch } = useTaskList({
+  // 查询个人任务（本周日期范围）
+  const {
+    tasks: personalTasks,
+    loading: personalLoading,
+    refetch: refetchPersonal,
+  } = useTaskListByGroup(null, {
     dueDateFrom: weekRange.from,
     dueDateTo: weekRange.to,
   });
+
+  // 查询默认群组任务（本周日期范围）
+  const {
+    tasks: defaultGroupTasks,
+    loading: defaultGroupLoading,
+    refetch: refetchDefault,
+  } = useTaskListByGroup(user?.defaultGroupId ?? undefined, {
+    dueDateFrom: weekRange.from,
+    dueDateTo: weekRange.to,
+  });
+
+  // 获取默认群组信息
+  const defaultGroup = user?.defaultGroupId
+    ? groups.find((g) => g.id === user.defaultGroupId)
+    : null;
+
+  // 获取其他群组（排除默认群组）
+  const otherGroups = groups.filter((g) => g.id !== user?.defaultGroupId);
+
+  // 查询其他群组的任务（使用useQueries）
+  const otherGroupQueries = useQueries({
+    queries: otherGroups.map((group) => ({
+      queryKey: ["tasks", "group", group.id, { dueDateFrom: weekRange.from, dueDateTo: weekRange.to }],
+      queryFn: async () => {
+        const result = await getTasks({
+          groupId: group.id,
+          dueDateFrom: weekRange.from,
+          dueDateTo: weekRange.to,
+        });
+        return {
+          group,
+          tasks: result.tasks.map(taskInfoToTask),
+        };
+      },
+      enabled: weekRange.from !== "" && weekRange.to !== "",
+    })),
+  });
+
+  const otherGroupTasks: { group: Group; tasks: Task[] }[] = otherGroupQueries
+    .map((query, index) => {
+      if (query.data) {
+        return query.data;
+      }
+      return {
+        group: otherGroups[index],
+        tasks: [],
+      };
+    })
+    .filter((data) => data.group !== undefined);
+  const otherGroupsLoading = otherGroupQueries.some((query) => query.isLoading);
+
+  // 计算loading状态
+  const loading = personalLoading || defaultGroupLoading || otherGroupsLoading;
 
   // 状态管理
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -59,17 +150,50 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [modalMode, setModalMode] = useState<"view" | "edit">("view");
 
-  // 按日期分组任务
-  const tasksByDate = useMemo(() => {
-    const grouped: { [key: string]: Task[] } = {};
+  // 按日期和群组双重分组任务
+  const tasksByDateAndGroup = useMemo(() => {
+    const result: {
+      [dateStr: string]: {
+        personal: Task[];
+        defaultGroup?: { group: Group; tasks: Task[] };
+        otherGroups: { group: Group; tasks: Task[] }[];
+      };
+    } = {};
 
     weekDays.forEach((date) => {
       const dateStr = formatLocalDate(date);
-      grouped[dateStr] = tasks.filter((task) => task.dueDate === dateStr);
+      result[dateStr] = {
+        personal: personalTasks.filter((task) => task.dueDate === dateStr),
+        otherGroups: [],
+      };
+
+      // 默认群组任务
+      if (defaultGroup && defaultGroupTasks) {
+        const groupTasks = defaultGroupTasks.filter((task) => task.dueDate === dateStr);
+        if (groupTasks.length > 0) {
+          result[dateStr].defaultGroup = {
+            group: defaultGroup,
+            tasks: groupTasks,
+          };
+        }
+      }
+
+      // 其他群组任务
+      otherGroupTasks.forEach((groupData) => {
+        if (groupData.group) {
+          const groupTasks = groupData.tasks.filter((task) => task.dueDate === dateStr);
+          if (groupTasks.length > 0) {
+            result[dateStr].otherGroups.push({
+              group: groupData.group,
+              tasks: groupTasks,
+            });
+          }
+        }
+      });
     });
 
-    return grouped;
-  }, [tasks, weekDays]);
+    return result;
+  }, [weekDays, personalTasks, defaultGroupTasks, defaultGroup, otherGroupTasks]);
 
   // 格式化日期范围
   const dateRange = useMemo(() => {
@@ -82,12 +206,26 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   // 任务状态切换函数
   const toggleTaskStatus = async (taskId: number) => {
     try {
-      const task = tasks.find((t) => t.id === taskId);
+      // 从所有任务源中查找任务
+      const allTasks = [
+        ...personalTasks,
+        ...(defaultGroupTasks || []),
+        ...otherGroupTasks.flatMap((g) => g.tasks),
+      ];
+      const task = allTasks.find((t) => t.id === taskId);
       if (!task) return;
 
       const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
       await updateTaskStatus(taskId, newStatus);
-      await refetch();
+
+      // 刷新所有任务列表
+      const refetchPromises = [
+        refetchPersonal(),
+        refetchDefault(),
+        ...otherGroupQueries.map((query) => query.refetch()),
+      ];
+      await Promise.all(refetchPromises);
+
       showToastSuccess(newStatus === "completed" ? "任务已完成 ✓" : "任务已标记为未完成");
     } catch (error) {
       console.error("更新任务状态失败:", error);
@@ -97,7 +235,12 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
 
   // 打开删除确认对话框
   const handleDeleteTask = (taskId: number) => {
-    const task = tasks.find((t) => t.id === taskId);
+    const allTasks = [
+      ...personalTasks,
+      ...(defaultGroupTasks || []),
+      ...otherGroupTasks.flatMap((g) => g.tasks),
+    ];
+    const task = allTasks.find((t) => t.id === taskId);
     if (task) {
       setDeleteConfirm({
         open: true,
@@ -112,7 +255,12 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
     if (!deleteConfirm) return;
     try {
       await deleteTask(deleteConfirm.taskId);
-      await refetch();
+      const refetchPromises = [
+        refetchPersonal(),
+        refetchDefault(),
+        ...otherGroupQueries.map((query) => query.refetch()),
+      ];
+      await Promise.all(refetchPromises);
       showToastSuccess("任务已删除");
     } catch (error) {
       console.error("删除任务失败:", error);
@@ -139,7 +287,12 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
     if (!editingTask) return;
     try {
       await updateTask(editingTask.id, data);
-      await refetch();
+      const refetchPromises = [
+        refetchPersonal(),
+        refetchDefault(),
+        ...otherGroupQueries.map((query) => query.refetch()),
+      ];
+      await Promise.all(refetchPromises);
       showToastSuccess("任务已更新");
       setEditingTask(null);
     } catch (error) {
@@ -166,7 +319,10 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
       <div className="space-y-6">
         {weekDays.map((date, index) => {
           const dateStr = formatLocalDate(date);
-          const dayTasks = tasksByDate[dateStr] || [];
+          const dayData = tasksByDateAndGroup[dateStr] || {
+            personal: [],
+            otherGroups: [],
+          };
 
           return loading ? (
             <DayGroupSkeleton key={dateStr} date={date} taskCount={2} />
@@ -175,7 +331,9 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
               key={dateStr}
               date={date}
               dayIndex={index}
-              tasks={dayTasks}
+              personalTasks={dayData.personal}
+              defaultGroup={dayData.defaultGroup}
+              otherGroups={dayData.otherGroups}
               onToggle={toggleTaskStatus}
               onViewTask={handleViewTask}
               onEditTask={handleEditTask}

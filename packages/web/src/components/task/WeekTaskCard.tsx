@@ -29,7 +29,7 @@ export function WeekTaskCard({ task, onToggle, onEdit, onDelete, onClick }: Week
   return (
     <div
       className={cn(
-        "bg-white rounded-lg p-3 border border-gray-100 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5",
+        "bg-white rounded-lg p-2 border border-gray-100 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5",
         isCompleted && "opacity-60",
         onClick && "cursor-pointer",
       )}
