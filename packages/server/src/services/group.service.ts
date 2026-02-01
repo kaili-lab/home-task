@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { groups, groupUsers, users } from "../db/schema";
 import type { CreateGroupInput, UpdateGroupInput, GroupInfo, GroupDetail } from "shared";
@@ -140,7 +140,7 @@ export class GroupService {
       .from(groupUsers)
       .innerJoin(groups, eq(groupUsers.groupId, groups.id))
       .where(and(eq(groupUsers.userId, userId), eq(groupUsers.status, "active")))
-      .orderBy(groups.createdAt);
+      .orderBy(desc(groups.createdAt));
 
     return userGroups.map((ug) => ({
       id: ug.id,

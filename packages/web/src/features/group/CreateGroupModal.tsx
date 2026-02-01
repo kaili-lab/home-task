@@ -9,23 +9,26 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { GroupIconSelector } from "@/features/group/GroupIconSelector";
 
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { name: string; icon: string }) => void;
+  onCreate: (data: { name: string; icon: string; isDefault: boolean }) => void;
 }
 
 export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModalProps) {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("🏠");
+  const [isDefault, setIsDefault] = useState(false);
 
   const handleSubmit = () => {
     if (name.trim()) {
-      onCreate({ name, icon });
+      onCreate({ name, icon, isDefault });
       setName("");
       setIcon("🏠");
+      setIsDefault(false);
       onClose();
     }
   };
@@ -53,6 +56,18 @@ export function CreateGroupModal({ isOpen, onClose, onCreate }: CreateGroupModal
           <div>
             <Label>选择群组图标</Label>
             <GroupIconSelector selectedIcon={icon} onSelect={setIcon} />
+          </div>
+
+          {/* 设为默认群组 */}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="isDefault"
+              checked={isDefault}
+              onCheckedChange={(checked) => setIsDefault(checked === true)}
+            />
+            <Label htmlFor="isDefault" className="cursor-pointer font-normal">
+              设为默认群组
+            </Label>
           </div>
 
           {/* 提示信息 */}

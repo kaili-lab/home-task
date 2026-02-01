@@ -54,7 +54,7 @@ export interface TaskInfo {
   assignedToNames: string[];
   completedBy: number | null;
   completedByName: string | null;
-  completedAt: Date | null;
+  completedAt: string | null;
   dueDate: string | null;
   startTime: string | null;
   endTime: string | null;
@@ -62,8 +62,8 @@ export interface TaskInfo {
   isRecurring: boolean;
   recurringRule: RecurringRule | null;
   recurringParentId: number | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 任务列表结果类型

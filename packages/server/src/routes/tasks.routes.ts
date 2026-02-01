@@ -151,8 +151,10 @@ tasksRoutes.get("/", async (c) => {
     }
 
     if (groupIdParam !== undefined) {
-      if (groupIdParam === "null" || groupIdParam === "") {
-        filters.groupId = undefined;
+      if (groupIdParam === "null") {
+        filters.groupId = null; // null 表示个人任务
+      } else if (groupIdParam === "") {
+        filters.groupId = undefined; // 空字符串表示不筛选
       } else {
         const groupId = parseInt(groupIdParam, 10);
         if (!isNaN(groupId)) {

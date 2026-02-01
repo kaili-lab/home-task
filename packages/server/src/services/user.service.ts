@@ -1,4 +1,4 @@
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, desc } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { users, groupUsers, groups } from "../db/schema";
 import type { UpdateUserInput, UserInfo, UserGroup } from "shared";
@@ -124,7 +124,7 @@ export class UserService {
       .from(groupUsers)
       .innerJoin(groups, eq(groupUsers.groupId, groups.id))
       .where(and(eq(groupUsers.userId, userId), eq(groupUsers.status, "active")))
-      .orderBy(groups.createdAt);
+      .orderBy(desc(groups.createdAt));
 
     // 为每个群组查询成员数量
     const groupsWithMemberCount = await Promise.all(

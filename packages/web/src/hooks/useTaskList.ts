@@ -1,45 +1,101 @@
-import { useState, useEffect } from "react";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import type { Task } from "@/types";
-import { mockTasks } from "@/lib/mockData";
+import type { TaskInfo } from "shared";
+import { getTasks } from "@/services/tasks.api";
+
+/**
+ * 将 TaskInfo 转换为 Task 类型
+ */
+function taskInfoToTask(taskInfo: TaskInfo): Task {
+  return {
+    id: taskInfo.id,
+    title: taskInfo.title,
+    description: taskInfo.description || undefined,
+    status: taskInfo.status,
+    priority: taskInfo.priority,
+    dueDate: taskInfo.dueDate || undefined,
+    startTime: taskInfo.startTime || undefined,
+    endTime: taskInfo.endTime || undefined,
+    isAllDay: !taskInfo.startTime && !taskInfo.endTime,
+    groupId: taskInfo.groupId || undefined,
+    createdBy: taskInfo.createdBy,
+    assignedTo: taskInfo.assignedToIds,
+    completedBy: taskInfo.completedBy || undefined,
+    completedAt: taskInfo.completedAt || undefined,
+    source: taskInfo.source,
+    isRecurring: taskInfo.isRecurring,
+    recurringRule: taskInfo.recurringRule || undefined,
+    recurringParentId: taskInfo.recurringParentId || undefined,
+    createdAt: taskInfo.createdAt,
+    updatedAt: taskInfo.updatedAt,
+  };
+}
 
 export function useTaskList() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["tasks"],
+    queryFn: async () => {
+      const result = await getTasks();
+      return result.tasks.map(taskInfoToTask);
+    },
+  });
 
-  useEffect(() => {
-    // 模拟 API 调用
-    setTimeout(() => {
-      setTasks(mockTasks);
-      setLoading(false);
-    }, 500);
-  }, []);
+  const tasks: Task[] = data || [];
+  const loading = isLoading;
 
   const toggleTaskStatus = (taskId: number) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              status: task.status === "completed" ? "pending" : "completed",
-              completedAt: task.status === "pending" ? new Date().toISOString() : undefined,
-            }
-          : task,
-      ),
-    );
+    // TODO: 实现任务状态切换的API调用
+    console.log("切换任务状态:", taskId);
   };
 
-  const createTask = async (taskData: Partial<Task>) => {
-    // TODO: 实际 API 调用
-    console.log("创建任务:", taskData);
-    const newTask: Task = {
-      id: Date.now(),
-      ...taskData,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as Task;
-    setTasks((prev) => [newTask, ...prev]);
-  };
+  return { tasks, loading, toggleTaskStatus, refetch };
+}
 
-  return { tasks, loading, toggleTaskStatus, createTask };
+/**
+ * 按群组查询任务列表
+ * @param groupId - 群组ID，null表示个人任务，undefined表示不查询
+ */
+export function useTaskListByGroup(groupId: number | null | undefined) {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["tasks", "group", groupId],
+    queryFn: async () => {
+      const result = await getTasks({ groupId: groupId === undefined ? undefined : groupId });
+      return result.tasks.map(taskInfoToTask);
+    },
+    enabled: groupId !== undefined, // 只有在groupId不是undefined时才查询（null表示个人任务，需要查询）
+  });
+
+  const tasks: Task[] = data || [];
+  const loading = isLoading;
+
+  return { tasks, loading, refetch };
+}
+
+/**
+ * 查询多个群组的任务
+ * @param groupIds - 群组ID数组
+ */
+export function useOtherGroupsTasks(groupIds: number[]) {
+  const queries = useQueries({
+    queries: groupIds.map((groupId) => ({
+      queryKey: ["tasks", "group", groupId],
+      queryFn: async () => {
+        const result = await getTasks({ groupId });
+        return {
+          groupId,
+          tasks: result.tasks.map(taskInfoToTask),
+        };
+      },
+    })),
+  });
+
+  const groupTasks = queries.map((query, index) => ({
+    groupId: groupIds[index],
+    tasks: query.data?.tasks || [],
+    loading: query.isLoading,
+  }));
+
+  const isLoading = queries.some((query) => query.isLoading);
+
+  return { groupTasks, isLoading };
 }

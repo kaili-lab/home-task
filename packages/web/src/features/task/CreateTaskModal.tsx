@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/hooks/useAuth";
 import { TaskFormRecurring } from "./TaskFormRecurring";
 import { TaskFormAssignees } from "./TaskFormAssignees";
 import type { Priority, RecurringRule } from "@/types";
@@ -36,8 +37,9 @@ interface CreateTaskModalProps {
 
 export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalProps) {
   const { groups } = useApp();
+  const { user } = useAuth();
   const [taskType, setTaskType] = useState<"group" | "personal">("group");
-  const [groupId, setGroupId] = useState("1");
+  const [groupId, setGroupId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -51,29 +53,75 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
     interval: 1,
     startDate: "",
   });
-  const [assignedTo, setAssignedTo] = useState<number[]>([1]);
+  const [assignedToIds, setAssignedToIds] = useState<number[]>([]);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+
+  // 初始化默认群组选择
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const availableGroups = groups.filter((g) => g.role === "owner" || g.role === "member");
+    if (availableGroups.length === 0) {
+      setGroupId("");
+      return;
+    }
+
+    // 优先使用用户的默认群组
+    if (user?.defaultGroupId) {
+      const defaultGroup = availableGroups.find((g) => g.id === user.defaultGroupId);
+      if (defaultGroup) {
+        setGroupId(String(defaultGroup.id));
+        return;
+      }
+    }
+
+    // 如果没有默认群组，选择第一个（按创建时间倒序，最新的在前）
+    setGroupId(String(availableGroups[0].id));
+  }, [isOpen, groups, user?.defaultGroupId]);
+
+  // 当群组切换时，清空已选择的成员（让 TaskFormAssignees 重新加载）
+  const handleGroupChange = (newGroupId: string) => {
+    setGroupId(newGroupId);
+    setAssignedToIds([]);
+  };
+
+  // 当任务类型切换时，清空已选择的成员
+  const handleTaskTypeChange = (newType: "group" | "personal") => {
+    setTaskType(newType);
+    setAssignedToIds([]);
+  };
 
   const handleSubmit = () => {
     const taskData = {
       title,
-      description,
-      dueDate,
-      isAllDay,
-      startTime: isAllDay ? undefined : startTime,
-      endTime: isAllDay ? undefined : endTime,
+      description: description || undefined,
+      dueDate: dueDate || undefined,
+      startTime: isAllDay ? undefined : startTime || undefined,
+      endTime: isAllDay ? undefined : endTime || undefined,
       priority,
-      groupId: taskType === "group" ? Number(groupId) : null,
-      assignedTo,
-      source: "human",
+      groupId: taskType === "group" && groupId ? Number(groupId) : null,
+      assignedToIds: assignedToIds.length > 0 ? assignedToIds : undefined,
+      source: "human" as const,
       isRecurring,
       recurringRule: isRecurring ? recurringRule : undefined,
     };
     onSubmit(taskData);
-    onClose();
     // Reset form
     setTitle("");
     setDescription("");
+    setDueDate("");
+    setIsAllDay(false);
+    setStartTime("");
+    setEndTime("");
+    setPriority("medium");
+    setIsRecurring(false);
+    setRecurringRule({
+      freq: "daily",
+      interval: 1,
+      startDate: "",
+    });
+    setAssignedToIds([]);
+    onClose();
   };
 
   return (
@@ -89,7 +137,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
             <Label>任务归属</Label>
             <RadioGroup
               value={taskType}
-              onValueChange={(v: any) => setTaskType(v)}
+              onValueChange={(v: any) => handleTaskTypeChange(v)}
               className="flex gap-3 mt-2"
             >
               <Label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg cursor-pointer has-checked:border-orange-500 has-checked:bg-orange-50">
@@ -107,7 +155,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
           {taskType === "group" && (
             <div>
               <Label>选择群组</Label>
-              <Select value={groupId} onValueChange={setGroupId}>
+              <Select value={groupId} onValueChange={handleGroupChange}>
                 <SelectTrigger className="mt-2">
                   <SelectValue />
                 </SelectTrigger>
@@ -241,7 +289,21 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
           />
 
           {/* 分配人员 */}
-          <TaskFormAssignees selected={assignedTo} onChange={setAssignedTo} />
+          {taskType === "group" && groupId ? (
+            <TaskFormAssignees
+              selected={assignedToIds}
+              onChange={setAssignedToIds}
+              groupId={Number(groupId)}
+              currentUserId={user?.id || 0}
+            />
+          ) : taskType === "personal" ? (
+            <TaskFormAssignees
+              selected={assignedToIds}
+              onChange={setAssignedToIds}
+              groupId={null}
+              currentUserId={user?.id || 0}
+            />
+          ) : null}
         </div>
 
         <DialogFooter>
