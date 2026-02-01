@@ -17,6 +17,7 @@ interface TaskFormRecurringProps {
   rule: RecurringRule;
   onRuleChange: (rule: RecurringRule) => void;
   startDate: string;
+  disabled?: boolean;
 }
 
 const weekdays = [
@@ -35,6 +36,7 @@ export function TaskFormRecurring({
   rule,
   onRuleChange,
   startDate,
+  disabled = false,
 }: TaskFormRecurringProps) {
   const maxEndDate = startDate
     ? new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1))
@@ -70,7 +72,7 @@ export function TaskFormRecurring({
   return (
     <div>
       <Label className="flex items-center gap-2 cursor-pointer">
-        <Checkbox checked={isRecurring} onCheckedChange={(v) => setIsRecurring(!!v)} />
+        <Checkbox checked={isRecurring} onCheckedChange={(v) => setIsRecurring(!!v)} disabled={disabled} />
         <span>🔁 设置为重复任务</span>
       </Label>
 
@@ -86,6 +88,7 @@ export function TaskFormRecurring({
           <Select
             value={rule.freq}
             onValueChange={(v: RecurringFreq) => onRuleChange({ ...rule, freq: v, interval: 1 })}
+            disabled={disabled}
           >
             <SelectTrigger className="mt-1">
               <SelectValue />
@@ -111,12 +114,14 @@ export function TaskFormRecurring({
                     rule.daysOfWeek?.includes(day.value)
                       ? "border-orange-500 bg-orange-50"
                       : "border-gray-200 hover:bg-gray-100",
+                    disabled && "opacity-50 cursor-not-allowed",
                   )}
                 >
                   <Checkbox
                     checked={rule.daysOfWeek?.includes(day.value)}
-                    onCheckedChange={() => toggleWeekday(day.value)}
+                    onCheckedChange={() => !disabled && toggleWeekday(day.value)}
                     className="sr-only"
+                    disabled={disabled}
                   />
                   <span className="text-xs">{day.label}</span>
                 </Label>
@@ -137,6 +142,7 @@ export function TaskFormRecurring({
               onChange={(e) => onRuleChange({ ...rule, dayOfMonth: Number(e.target.value) })}
               placeholder="1-31"
               className="mt-1"
+              disabled={disabled}
             />
           </div>
         )}
@@ -151,6 +157,7 @@ export function TaskFormRecurring({
             value={rule.endDate || ""}
             onChange={(e) => onRuleChange({ ...rule, endDate: e.target.value })}
             className="mt-1"
+            disabled={disabled}
           />
           {!rule.endDate && startDate ? (
             <p className="text-xs text-orange-600 mt-1">

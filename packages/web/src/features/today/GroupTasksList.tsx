@@ -1,5 +1,5 @@
 import { useTaskListByGroup } from "@/hooks/useTaskList";
-import type { Group } from "@/types";
+import type { Group, Task } from "@/types";
 import { TaskSection } from "@/components/task/TaskSection";
 import { TaskCard } from "@/components/task/TaskCard";
 import { TaskListSkeleton } from "@/features/task/TaskListSkeleton";
@@ -8,6 +8,9 @@ interface GroupTasksListProps {
   groups: Group[];
   excludeGroupId?: number;
   onToggleTaskStatus?: (taskId: number) => void;
+  onViewTask?: (task: Task) => void;
+  onEditTask?: (task: Task) => void;
+  onDeleteTask?: (taskId: number) => void;
   dateFilter?: { dueDate?: string; dueDateFrom?: string; dueDateTo?: string };
 }
 
@@ -15,6 +18,9 @@ export function GroupTasksList({
   groups,
   excludeGroupId,
   onToggleTaskStatus,
+  onViewTask,
+  onEditTask,
+  onDeleteTask,
   dateFilter,
 }: GroupTasksListProps) {
   // 过滤掉排除的群组
@@ -37,6 +43,9 @@ export function GroupTasksList({
           key={group.id}
           group={group}
           onToggleTaskStatus={onToggleTaskStatus}
+          onViewTask={onViewTask}
+          onEditTask={onEditTask}
+          onDeleteTask={onDeleteTask}
           dateFilter={dateFilter}
         />
       ))}
@@ -47,10 +56,13 @@ export function GroupTasksList({
 interface GroupTasksSectionProps {
   group: Group;
   onToggleTaskStatus?: (taskId: number) => void;
+  onViewTask?: (task: Task) => void;
+  onEditTask?: (task: Task) => void;
+  onDeleteTask?: (taskId: number) => void;
   dateFilter?: { dueDate?: string; dueDateFrom?: string; dueDateTo?: string };
 }
 
-function GroupTasksSection({ group, onToggleTaskStatus, dateFilter }: GroupTasksSectionProps) {
+function GroupTasksSection({ group, onToggleTaskStatus, onViewTask, onEditTask, onDeleteTask, dateFilter }: GroupTasksSectionProps) {
   const { tasks, loading } = useTaskListByGroup(group.id, dateFilter);
 
   return (
@@ -67,9 +79,16 @@ function GroupTasksSection({ group, onToggleTaskStatus, dateFilter }: GroupTasks
           <p>暂无任务</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onToggle={onToggleTaskStatus || (() => {})} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              onToggle={onToggleTaskStatus || (() => {})}
+              onEdit={onEditTask}
+              onDelete={onDeleteTask}
+              onClick={onViewTask}
+            />
           ))}
         </div>
       )}
