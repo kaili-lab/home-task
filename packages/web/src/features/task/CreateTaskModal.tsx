@@ -29,6 +29,7 @@ import { TaskFormRecurring } from "./TaskFormRecurring";
 import { TaskFormAssignees } from "./TaskFormAssignees";
 import type { Priority, RecurringRule, Task } from "@/types";
 import { showToastError } from "@/utils/toast";
+import { formatLocalDate } from "@/utils/date";
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -120,7 +121,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
     setTitle(editTask.title);
     setDescription(editTask.description || "");
     setDueDate(editTask.dueDate || "");
-    setIsAllDay(editTask.isAllDay);
+    setIsAllDay(editTask.isAllDay ?? false);
     setStartTime(editTask.startTime || "");
     setEndTime(editTask.endTime || "");
     setPriority(editTask.priority);
@@ -181,7 +182,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
     }
 
     const taskData = {
-      ...(mode === "edit" && editTask ? { id: editTask.id } : {}),
+      ...(internalMode === "edit" && editTask ? { id: editTask.id } : {}),
       title,
       description: description || undefined,
       // 重复任务不传 dueDate（后端会设为 NULL）
@@ -326,7 +327,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
                     selected={dueDate ? new Date(dueDate) : undefined}
                     onSelect={(date) => {
                       if (date) {
-                        setDueDate(format(date, "yyyy-MM-dd"));
+                        setDueDate(formatLocalDate(date));
                         setDatePickerOpen(false);
                       }
                     }}

@@ -11,6 +11,7 @@ import { GroupTasksList } from "./GroupTasksList";
 import { CreateTaskModal } from "@/features/task/CreateTaskModal";
 import { updateTaskStatus, deleteTask, updateTask } from "@/services/tasks.api";
 import { showToastError, showToastSuccess } from "@/utils/toast";
+import { getTodayLocalDate } from "@/utils/date";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { TaskStatus, Task } from "@/types";
 
@@ -28,20 +29,24 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
 
   // 获取今天的日期字符串 YYYY-MM-DD
   const today = useMemo(() => {
-    const date = new Date();
-    return date.toISOString().split("T")[0];
+    return getTodayLocalDate();
   }, []);
 
   // 查询个人任务（只显示今天的）
-  const { tasks: personalTasks, loading: personalLoading, refetch: refetchPersonal } = useTaskListByGroup(null, {
+  const {
+    tasks: personalTasks,
+    loading: personalLoading,
+    refetch: refetchPersonal,
+  } = useTaskListByGroup(null, {
     dueDate: today,
   });
 
   // 查询默认群组任务（只显示今天的）
-  const { tasks: defaultGroupTasks, loading: defaultGroupLoading, refetch: refetchDefault } = useTaskListByGroup(
-    user?.defaultGroupId ?? undefined,
-    { dueDate: today }
-  );
+  const {
+    tasks: defaultGroupTasks,
+    loading: defaultGroupLoading,
+    refetch: refetchDefault,
+  } = useTaskListByGroup(user?.defaultGroupId ?? undefined, { dueDate: today });
 
   // 获取默认群组信息
   const defaultGroup = user?.defaultGroupId
@@ -49,9 +54,7 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
     : null;
 
   // 获取我创建的群组（排除默认群组）
-  const createdGroups = groups.filter(
-    (g) => g.role === "owner" && g.id !== user?.defaultGroupId
-  );
+  const createdGroups = groups.filter((g) => g.role === "owner" && g.id !== user?.defaultGroupId);
 
   // 获取我加入的群组
   const joinedGroups = groups.filter((g) => g.role === "member");
@@ -65,9 +68,7 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
   const toggleTaskStatus = async (taskId: number) => {
     try {
       // 查找任务以获取当前状态
-      const task = [...personalTasks, ...(defaultGroupTasks || [])].find(
-        (t) => t.id === taskId
-      );
+      const task = [...personalTasks, ...(defaultGroupTasks || [])].find((t) => t.id === taskId);
       if (!task) return;
 
       // 切换状态
@@ -89,9 +90,7 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
 
   // 打开删除确认对话框
   const handleDeleteTask = (taskId: number) => {
-    const task = [...personalTasks, ...(defaultGroupTasks || [])].find(
-      (t) => t.id === taskId
-    );
+    const task = [...personalTasks, ...(defaultGroupTasks || [])].find((t) => t.id === taskId);
     if (task) {
       setDeleteConfirm({
         open: true,
@@ -226,7 +225,7 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
         >
           <GroupTasksList
             groups={createdGroups}
-            excludeGroupId={user?.defaultGroupId}
+            excludeGroupId={user?.defaultGroupId ?? undefined}
             onToggleTaskStatus={toggleTaskStatus}
             onViewTask={handleViewTask}
             onEditTask={handleEditTask}

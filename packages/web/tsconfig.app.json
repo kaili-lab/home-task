@@ -33,7 +33,7 @@
     "jsx": "react-jsx", // 使用 React 17+ 推荐的 JSX 转换方式
 
     // 基础路径配置，用于解析路径别名（shadcn CLI 需要）
-    "baseUrl": ".",
+    // "baseUrl": ".",
 
     // 路径别名配置，允许用 `@/` 代表 `src/`
     "paths": {
@@ -48,5 +48,5 @@
     "noFallthroughCasesInSwitch": true, // 禁止 switch 语句中漏写break/return，避免逻辑错误
     "noUncheckedSideEffectImports": true // 避免副作用导入被忽略，确保导入的库正确运行
   },
-  "include": ["src"], // 指定只对 src 目录下的文件进行类型检查
+  "include": ["src"] // 指定只对 src 目录下的文件进行类型检查
 }

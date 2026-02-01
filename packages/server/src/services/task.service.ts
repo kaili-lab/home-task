@@ -305,13 +305,13 @@ export class TaskService {
       }
 
       if (shouldAdd) {
-        const dateStr = currentDate.toISOString().split("T")[0];
-        
+        const dateStr = this.formatDate(currentDate);
+
         // 检查是否超过 endDate
         if (rule.endDate && dateStr > rule.endDate) {
           break;
         }
-        
+
         dates.push(dateStr);
         iteration++;
       }

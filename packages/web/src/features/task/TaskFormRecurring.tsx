@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import type { RecurringRule, RecurringFreq } from "@/types";
 import { cn } from "@/lib/utils";
+import { formatLocalDate } from "@/utils/date";
 
 interface TaskFormRecurringProps {
   isRecurring: boolean;
@@ -39,16 +40,20 @@ export function TaskFormRecurring({
   disabled = false,
 }: TaskFormRecurringProps) {
   const maxEndDate = startDate
-    ? new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1))
-        .toISOString()
-        .split("T")[0]
+    ? (() => {
+        const date = new Date(startDate);
+        date.setFullYear(date.getFullYear() + 1);
+        return formatLocalDate(date);
+      })()
     : "";
 
   // 计算开始日期后的明天（结束日期的最小值）
   const minEndDate = startDate
-    ? new Date(new Date(startDate).getTime() + 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0]
+    ? (() => {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + 1);
+        return formatLocalDate(date);
+      })()
     : "";
 
   // 计算一年后的日期并格式化为中文
@@ -72,14 +77,18 @@ export function TaskFormRecurring({
   return (
     <div>
       <Label className="flex items-center gap-2 cursor-pointer">
-        <Checkbox checked={isRecurring} onCheckedChange={(v) => setIsRecurring(!!v)} disabled={disabled} />
+        <Checkbox
+          checked={isRecurring}
+          onCheckedChange={(v) => setIsRecurring(!!v)}
+          disabled={disabled}
+        />
         <span>🔁 设置为重复任务</span>
       </Label>
 
       <div
         className={cn(
           "mt-3 space-y-3 p-3 bg-gray-50 rounded-lg overflow-hidden transition-all",
-          isRecurring ? "max-h-[500px]" : "max-h-0 p-0",
+          isRecurring ? "max-h-125" : "max-h-0 p-0",
         )}
       >
         {/* 重复频率 */}

@@ -1,37 +1,27 @@
 import type { Task } from "@/types";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { WeekTaskCard } from "@/components/task/WeekTaskCard";
 
 interface DayGroupProps {
   date: Date;
   dayIndex: number;
   tasks: Task[];
   onToggle: (taskId: number) => void;
+  onViewTask?: (task: Task) => void;
+  onEditTask?: (task: Task) => void;
+  onDeleteTask?: (taskId: number) => void;
 }
 
 const weekdayNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-const priorityColors = {
-  low: "bg-green-500",
-  medium: "bg-orange-500",
-  high: "bg-red-500",
-};
-
-export function DayGroup({ date, tasks, onToggle }: DayGroupProps) {
+export function DayGroup({ date, tasks, onToggle, onViewTask, onEditTask, onDeleteTask }: DayGroupProps) {
   const isToday = new Date().toDateString() === date.toDateString();
   const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
   const dayOfWeek = date.getDay();
 
   const formatDate = () => {
     return `${date.getMonth() + 1}月${date.getDate()}日`;
-  };
-
-  const formatTime = (task: Task) => {
-    if (task.isAllDay) return "全天";
-    if (task.startTime && task.endTime) return `${task.startTime}-${task.endTime}`;
-    if (task.startTime) return `${task.startTime}前`;
-    return "";
   };
 
   return (
@@ -60,34 +50,19 @@ export function DayGroup({ date, tasks, onToggle }: DayGroupProps) {
 
       {/* Tasks */}
       {tasks.length > 0 ? (
-        <div className="ml-20 space-y-2">
-          {tasks.map((task) => {
-            const isCompleted = task.status === "completed";
-            return (
-              <div
+        <div className="ml-20">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            {tasks.map((task) => (
+              <WeekTaskCard
                 key={task.id}
-                className={cn(
-                  "flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 transition-all hover:shadow-sm",
-                  isCompleted && "opacity-60",
-                )}
-              >
-                <Checkbox checked={isCompleted} onCheckedChange={() => onToggle(task.id)} />
-                <span
-                  className={cn(
-                    "flex-1 text-gray-700",
-                    isCompleted && "line-through text-gray-400",
-                  )}
-                >
-                  {task.title}
-                </span>
-                <span className="text-xs text-gray-400">{formatTime(task)}</span>
-                <span
-                  className={cn("w-2 h-2 rounded-full", priorityColors[task.priority])}
-                  title={`${task.priority}优先级`}
-                />
-              </div>
-            );
-          })}
+                task={task}
+                onToggle={onToggle}
+                onEdit={onEditTask}
+                onDelete={onDeleteTask}
+                onClick={onViewTask}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="ml-20 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-200 text-center">
