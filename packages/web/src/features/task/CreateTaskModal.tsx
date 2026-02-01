@@ -28,6 +28,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { TaskFormRecurring } from "./TaskFormRecurring";
 import { TaskFormAssignees } from "./TaskFormAssignees";
 import type { Priority, RecurringRule } from "@/types";
+import { showToastError } from "@/utils/toast";
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -55,6 +56,21 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
   });
   const [assignedToIds, setAssignedToIds] = useState<number[]>([]);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+
+  // 获取今天的日期（只包含年月日，不包含时间）
+  const getToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  };
+
+  // 禁用今天之前的日期
+  const isDateDisabled = (date: Date) => {
+    const today = getToday();
+    const selectedDate = new Date(date);
+    selectedDate.setHours(0, 0, 0, 0);
+    return selectedDate < today;
+  };
 
   // 初始化默认群组选择
   useEffect(() => {
@@ -92,10 +108,44 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
   };
 
   const handleSubmit = () => {
+    // 校验：描述必填
+    if (!description) {
+      showToastError("请填写任务描述");
+      return;
+    }
+
+    // 校验：非重复任务日期必填
+    if (!isRecurring && !dueDate) {
+      showToastError("请选择任务日期");
+      return;
+    }
+
+    // 校验：群组任务必须有分配人
+    if (taskType === "group" && assignedToIds.length === 0) {
+      showToastError("群组任务必须至少分配给一个成员");
+      return;
+    }
+
+    // 校验：全天任务和定时任务的二选一关系
+    if (isAllDay) {
+      // 全天任务：不应该有时间
+      if (startTime || endTime) {
+        showToastError("全天任务不需要指定时间");
+        return;
+      }
+    } else {
+      // 定时任务：必须同时填写开始和结束时间
+      if (!startTime || !endTime) {
+        showToastError("请同时填写开始时间和结束时间");
+        return;
+      }
+    }
+
     const taskData = {
       title,
       description: description || undefined,
-      dueDate: dueDate || undefined,
+      // 重复任务不传 dueDate（后端会设为 NULL）
+      dueDate: isRecurring ? undefined : (dueDate || undefined),
       startTime: isAllDay ? undefined : startTime || undefined,
       endTime: isAllDay ? undefined : endTime || undefined,
       priority,
@@ -103,7 +153,10 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
       assignedToIds: assignedToIds.length > 0 ? assignedToIds : undefined,
       source: "human" as const,
       isRecurring,
-      recurringRule: isRecurring ? recurringRule : undefined,
+      recurringRule: isRecurring ? {
+        ...recurringRule,
+        startDate: dueDate, // 使用选择的日期作为 startDate
+      } : undefined,
     };
     onSubmit(taskData);
     // Reset form
@@ -183,7 +236,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
 
           {/* 任务描述 */}
           <div>
-            <Label>任务描述</Label>
+            <Label>任务描述 *</Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -221,13 +274,25 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
                         setDatePickerOpen(false);
                       }
                     }}
+                    disabled={isDateDisabled}
                   />
                 </PopoverContent>
               </Popover>
             </div>
             <div>
               <Label className="flex items-center gap-2 mb-2">
-                <Checkbox checked={isAllDay} onCheckedChange={(v) => setIsAllDay(!!v)} />
+                <Checkbox 
+                  checked={isAllDay} 
+                  onCheckedChange={(v) => {
+                    const checked = !!v;
+                    setIsAllDay(checked);
+                    // 选中全天任务时，清空时间
+                    if (checked) {
+                      setStartTime("");
+                      setEndTime("");
+                    }
+                  }} 
+                />
                 <span>全天任务</span>
               </Label>
               {!isAllDay && (
@@ -239,6 +304,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
                       setStartTime(e.target.value);
                       e.target.blur();
                     }}
+                    placeholder="开始时间"
                   />
                   <Input
                     type="time"
@@ -247,6 +313,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
                       setEndTime(e.target.value);
                       e.target.blur();
                     }}
+                    placeholder="结束时间"
                   />
                 </div>
               )}
@@ -312,7 +379,12 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit }: CreateTaskModalPr
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!title}
+            disabled={
+              !title ||
+              !description ||
+              (!isRecurring && !dueDate) ||
+              (taskType === "group" && assignedToIds.length === 0)
+            }
             className="bg-orange-500 hover:bg-orange-600"
           >
             创建任务

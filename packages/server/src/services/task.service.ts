@@ -1,4 +1,4 @@
-import { eq, and, or, isNull, inArray, desc, asc, count } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, inArray, desc, asc, count, gte, lte } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { tasks, groupUsers, users, groups, taskAssignments } from "../db/schema";
 import type {
@@ -69,6 +69,27 @@ export class TaskService {
       }
     }
 
+    // 验证时间逻辑：startTime 和 endTime 必须同时存在或同时为空（二选一）
+    const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+    const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+    const hasBothTimes = hasStartTime && hasEndTime;
+    const hasNoTimes = !hasStartTime && !hasEndTime;
+    
+    // 必须是"两个都有"或"两个都没有"（二选一）
+    if (!hasBothTimes && !hasNoTimes) {
+      throw new Error("开始时间和结束时间必须同时填写");
+    }
+
+    // 重复任务逻辑
+    if (data.isRecurring && data.recurringRule) {
+      // 验证重复规则
+      this.validateRecurringRule(data.recurringRule);
+      
+      // 创建模板 + 生成实例（事务）
+      return await this.createRecurringTask(userId, data);
+    }
+
+    // 一次性任务逻辑
     // 创建任务记录
     const result = (await this.db
       .insert(tasks)
@@ -82,8 +103,8 @@ export class TaskService {
         endTime: data.endTime || null,
         source: data.source || "human",
         priority: data.priority || "medium",
-        isRecurring: data.isRecurring || false,
-        recurringRule: data.recurringRule || null,
+        isRecurring: false,
+        recurringRule: null,
         recurringParentId: null,
         status: "pending",
       })
@@ -106,6 +127,205 @@ export class TaskService {
 
     // 获取完整任务信息（包含关联数据）
     return this.getTaskById(task.id, userId);
+  }
+
+  /**
+   * 验证重复规则
+   */
+  private validateRecurringRule(rule: RecurringRule): void {
+    // 1. 如果未指定结束条件，默认设置为1年后
+    if (!rule.endDate && !rule.endAfterOccurrences) {
+      const startDate = new Date(rule.startDate);
+      const oneYearLater = new Date(startDate);
+      oneYearLater.setFullYear(startDate.getFullYear() + 1);
+      rule.endDate = this.formatDate(oneYearLater);
+    }
+
+    // 2. 开始日期必填
+    if (!rule.startDate) {
+      throw new Error("重复任务必须指定开始日期");
+    }
+
+    // 3. weekly 必须指定 daysOfWeek
+    if (rule.freq === "weekly" && (!rule.daysOfWeek || rule.daysOfWeek.length === 0)) {
+      throw new Error("每周重复任务必须选择至少一个星期");
+    }
+
+    // 4. monthly 必须指定 dayOfMonth
+    if (rule.freq === "monthly" && !rule.dayOfMonth) {
+      throw new Error("每月重复任务必须指定日期");
+    }
+
+    // 5. 限制最大生成数量（365天或365次）
+    if (rule.endAfterOccurrences && rule.endAfterOccurrences > 365) {
+      throw new Error("重复次数不能超过365次");
+    }
+
+    // 6. 验证结束日期
+    if (rule.endDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const endDate = new Date(rule.endDate);
+      endDate.setHours(0, 0, 0, 0);
+
+      // 6.1 结束日期不能是今天或之前的日期
+      if (endDate <= today) {
+        throw new Error("重复任务结束日期必须是明天或以后的日期");
+      }
+
+      // 6.2 时间跨度不超过1年
+      const startDate = new Date(rule.startDate);
+      const diffDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 365) {
+        throw new Error("重复任务时间跨度不能超过1年");
+      }
+      if (diffDays < 0) {
+        throw new Error("结束日期必须晚于开始日期");
+      }
+    }
+  }
+
+  /**
+   * 格式化日期为 YYYY-MM-DD
+   */
+  private formatDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * 创建重复任务（模板+实例）
+   */
+  private async createRecurringTask(userId: number, data: CreateTaskInput): Promise<TaskInfo> {
+    // Step 1: 创建模板任务（dueDate = NULL）
+    const templateResult = await this.db
+      .insert(tasks)
+      .values({
+        title: data.title,
+        description: data.description || null,
+        groupId: data.groupId || null,
+        createdBy: userId,
+        dueDate: null, // 模板的 dueDate 必须为 NULL
+        startTime: data.startTime || null,
+        endTime: data.endTime || null,
+        source: data.source || "human",
+        priority: data.priority || "medium",
+        isRecurring: true,
+        recurringRule: data.recurringRule,
+        recurringParentId: null,
+        status: "pending",
+      })
+      .returning();
+
+    const template = templateResult[0];
+    if (!template) {
+      throw new Error("创建重复任务模板失败");
+    }
+
+    // Step 2: 计算实例日期列表
+    const instanceDates = this.calculateInstanceDates(data.recurringRule!);
+
+    // Step 3: 批量生成实例任务
+    if (instanceDates.length > 0) {
+      await this.db.insert(tasks).values(
+        instanceDates.map((date) => ({
+          title: data.title,
+          description: data.description || null,
+          groupId: data.groupId || null,
+          createdBy: userId,
+          dueDate: date, // 实例的 dueDate 是具体日期
+          startTime: data.startTime || null,
+          endTime: data.endTime || null,
+          source: data.source || "human",
+          priority: data.priority || "medium",
+          isRecurring: false, // 实例的 isRecurring 为 false
+          recurringRule: null, // 实例不存储规则
+          recurringParentId: template.id, // 指向模板
+          status: "pending",
+        }))
+      );
+    }
+
+    // Step 4: 创建任务分配（应用到模板和所有实例）
+    if (data.assignedToIds && data.assignedToIds.length > 0) {
+      // 查询刚生成的所有实例
+      const instances = await this.db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.recurringParentId, template.id));
+
+      const allTaskIds = [template.id, ...instances.map((t) => t.id)];
+
+      // 批量创建分配记录
+      const assignments = allTaskIds.flatMap((taskId) =>
+        data.assignedToIds!.map((assigneeUserId) => ({
+          taskId,
+          userId: assigneeUserId,
+        }))
+      );
+
+      await this.db.insert(taskAssignments).values(assignments);
+    }
+
+    // 返回模板任务信息
+    return this.getTaskById(template.id, userId);
+  }
+
+  /**
+   * 计算重复任务的实例日期列表
+   */
+  private calculateInstanceDates(rule: RecurringRule): string[] {
+    const dates: string[] = [];
+    const startDate = new Date(rule.startDate);
+    let currentDate = new Date(startDate);
+
+    // 确定结束条件
+    const maxIterations = rule.endAfterOccurrences || 365;
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      let shouldAdd = false;
+
+      switch (rule.freq) {
+        case "daily":
+          shouldAdd = true;
+          break;
+
+        case "weekly":
+          const dayOfWeek = currentDate.getDay();
+          shouldAdd = rule.daysOfWeek?.includes(dayOfWeek) || false;
+          break;
+
+        case "monthly":
+          const dayOfMonth = currentDate.getDate();
+          shouldAdd = dayOfMonth === rule.dayOfMonth;
+          break;
+      }
+
+      if (shouldAdd) {
+        const dateStr = currentDate.toISOString().split("T")[0];
+        
+        // 检查是否超过 endDate
+        if (rule.endDate && dateStr > rule.endDate) {
+          break;
+        }
+        
+        dates.push(dateStr);
+        iteration++;
+      }
+
+      // 移动到下一天
+      currentDate.setDate(currentDate.getDate() + 1);
+
+      // 防止无限循环
+      if (rule.endDate && currentDate > new Date(rule.endDate)) {
+        break;
+      }
+    }
+
+    return dates;
   }
 
   /**
@@ -176,6 +396,32 @@ export class TaskService {
     // 优先级筛选
     if (filters.priority) {
       conditions.push(eq(tasks.priority, filters.priority));
+    }
+
+    // 日期筛选
+    if (filters.dueDate) {
+      // 精确匹配某一天
+      conditions.push(eq(tasks.dueDate, filters.dueDate));
+    } else if (filters.dueDateFrom || filters.dueDateTo) {
+      // 日期范围查询
+      if (filters.dueDateFrom && filters.dueDateTo) {
+        conditions.push(
+          and(
+            gte(tasks.dueDate, filters.dueDateFrom),
+            lte(tasks.dueDate, filters.dueDateTo),
+          ),
+        );
+      } else if (filters.dueDateFrom) {
+        conditions.push(gte(tasks.dueDate, filters.dueDateFrom));
+      } else if (filters.dueDateTo) {
+        conditions.push(lte(tasks.dueDate, filters.dueDateTo));
+      }
+    }
+
+    // 排除模板任务（dueDate IS NOT NULL）
+    // 除非明确指定 includeNullDueDate=true
+    if (!filters.includeNullDueDate) {
+      conditions.push(isNotNull(tasks.dueDate));
     }
 
     // 排除重复任务实例

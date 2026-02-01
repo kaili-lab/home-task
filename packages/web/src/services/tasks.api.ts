@@ -35,6 +35,10 @@ export async function getTasks(filters?: TaskFilters) {
   }
   if (filters?.page) params.append("page", String(filters.page));
   if (filters?.limit) params.append("limit", String(filters.limit));
+  if (filters?.dueDate) params.append("dueDate", filters.dueDate);
+  if (filters?.dueDateFrom) params.append("dueDateFrom", filters.dueDateFrom);
+  if (filters?.dueDateTo) params.append("dueDateTo", filters.dueDateTo);
+  if (filters?.includeNullDueDate) params.append("includeNullDueDate", "true");
 
   const queryString = params.toString();
   const endpoint = queryString ? `/api/tasks?${queryString}` : "/api/tasks";

@@ -103,9 +103,33 @@ export function MyJoinedGroupsView() {
 
   return (
     <section className="p-6">
-      <div className="mb-5">
-        <h2 className="text-2xl font-bold text-gray-800">我加入的群组 ➕</h2>
-        <p className="text-gray-500 text-sm mt-1">查看你加入的家庭群组</p>
+      {/* 标题和加入群组区域 */}
+      <div className="flex justify-between items-start gap-4 mb-5">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">我加入的群组 ➕</h2>
+          <p className="text-gray-500 text-sm mt-1">查看你加入的家庭群组</p>
+        </div>
+        {/* 加入群组输入框和按钮 */}
+        <div className="flex items-center gap-3 shrink-0">
+          <Input
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+            placeholder="输入邀请码"
+            className="w-64 border-2 border-orange-300 focus:border-orange-500"
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && !joining && inviteCode.trim()) {
+                handleJoinGroup();
+              }
+            }}
+          />
+          <Button
+            onClick={handleJoinGroup}
+            disabled={!inviteCode.trim() || joining}
+            className="bg-orange-500 hover:bg-orange-600 whitespace-nowrap"
+          >
+            {joining ? "加入中..." : "加入群组"}
+          </Button>
+        </div>
       </div>
 
       {/* 群组列表 */}
@@ -113,28 +137,7 @@ export function MyJoinedGroupsView() {
         <Card className="p-12 text-center max-w-2xl mx-auto mt-24">
           <div className="text-4xl mb-3">👥</div>
           <p className="text-gray-400 mb-4">还没有加入的群组</p>
-          <p className="text-sm text-gray-500 mb-6">输入邀请码加入群组</p>
-          {/* 输入邀请码区域 */}
-          <div className="flex items-center gap-3 max-w-md mx-auto">
-            <Input
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              placeholder="输入邀请码"
-              className="flex-1"
-              onKeyPress={(e) => {
-                if (e.key === "Enter" && !joining && inviteCode.trim()) {
-                  handleJoinGroup();
-                }
-              }}
-            />
-            <Button
-              onClick={handleJoinGroup}
-              disabled={!inviteCode.trim() || joining}
-              className="bg-orange-500 hover:bg-orange-600 whitespace-nowrap"
-            >
-              {joining ? "加入中..." : "加入群组"}
-            </Button>
-          </div>
+          <p className="text-sm text-gray-500">在上方输入邀请码加入群组</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

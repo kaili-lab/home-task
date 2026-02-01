@@ -10,8 +10,6 @@ interface WeekViewProps {
 }
 
 export function WeekView({ onCreateTask }: WeekViewProps) {
-  const { tasks, toggleTaskStatus, loading } = useTaskList();
-
   // 获取本周日期范围（周一到周日）
   const weekDays = useMemo(() => {
     const today = new Date();
@@ -29,6 +27,23 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
     }
     return days;
   }, []);
+
+  // 计算本周日期范围
+  const weekRange = useMemo(() => {
+    if (weekDays.length === 0) return { from: "", to: "" };
+    const monday = weekDays[0];
+    const sunday = weekDays[6];
+    return {
+      from: monday.toISOString().split("T")[0],
+      to: sunday.toISOString().split("T")[0],
+    };
+  }, [weekDays]);
+
+  // 使用日期范围查询任务
+  const { tasks, toggleTaskStatus, loading } = useTaskList({
+    dueDateFrom: weekRange.from,
+    dueDateTo: weekRange.to,
+  });
 
   // 按日期分组任务
   const tasksByDate = useMemo(() => {

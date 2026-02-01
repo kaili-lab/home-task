@@ -16,7 +16,7 @@ const tasksRoutes = new Hono<{
 // 创建任务的Zod Schema
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().optional(),
+  description: z.string().min(1),
   groupId: z.number().int().positive().nullable().optional(),
   assignedToIds: z.array(z.number().int().positive()).optional(),
   dueDate: z
@@ -51,6 +51,34 @@ const createTaskSchema = z.object({
     })
     .nullable()
     .optional(),
+}).refine((data) => {
+  // 验证：startTime 和 endTime 必须同时存在或同时为空（二选一）
+  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+
+  // 要么都有，要么都没有（二选一）
+  return (hasStartTime && hasEndTime) || (!hasStartTime && !hasEndTime);
+}, {
+  message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
+  path: ["startTime"],
+}).refine((data) => {
+  // 验证：非重复任务必须有日期
+  if (!data.isRecurring && (!data.dueDate || data.dueDate === null)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "一次性任务必须指定执行日期",
+  path: ["dueDate"],
+}).refine((data) => {
+  // 验证：群组任务必须有分配人
+  if (data.groupId && (!data.assignedToIds || data.assignedToIds.length === 0)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "群组任务必须至少分配给一个成员",
+  path: ["assignedToIds"],
 });
 
 // 更新任务的Zod Schema
@@ -90,6 +118,16 @@ const updateTaskSchema = z.object({
     })
     .nullable()
     .optional(),
+}).refine((data) => {
+  // 验证：startTime 和 endTime 必须同时存在或同时为空（二选一）
+  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+  
+  // 要么都有，要么都没有（二选一）
+  return (hasStartTime && hasEndTime) || (!hasStartTime && !hasEndTime);
+}, {
+  message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
+  path: ["startTime"],
 });
 
 // 更新任务状态的Zod Schema
@@ -194,6 +232,28 @@ tasksRoutes.get("/", async (c) => {
 
     if (excludeRecurringInstancesParam === "true") {
       filters.excludeRecurringInstances = true;
+    }
+
+    // 解析日期过滤参数
+    const dueDateParam = c.req.query("dueDate");
+    const dueDateFromParam = c.req.query("dueDateFrom");
+    const dueDateToParam = c.req.query("dueDateTo");
+    const includeNullDueDateParam = c.req.query("includeNullDueDate");
+
+    if (dueDateParam) {
+      filters.dueDate = dueDateParam;
+    }
+
+    if (dueDateFromParam) {
+      filters.dueDateFrom = dueDateFromParam;
+    }
+
+    if (dueDateToParam) {
+      filters.dueDateTo = dueDateToParam;
+    }
+
+    if (includeNullDueDateParam === "true") {
+      filters.includeNullDueDate = true;
     }
 
     const taskService = new TaskService(db);

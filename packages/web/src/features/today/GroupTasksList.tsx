@@ -8,12 +8,14 @@ interface GroupTasksListProps {
   groups: Group[];
   excludeGroupId?: number;
   onToggleTaskStatus?: (taskId: number) => void;
+  dateFilter?: { dueDate?: string; dueDateFrom?: string; dueDateTo?: string };
 }
 
 export function GroupTasksList({
   groups,
   excludeGroupId,
   onToggleTaskStatus,
+  dateFilter,
 }: GroupTasksListProps) {
   // 过滤掉排除的群组
   const filteredGroups = excludeGroupId
@@ -35,6 +37,7 @@ export function GroupTasksList({
           key={group.id}
           group={group}
           onToggleTaskStatus={onToggleTaskStatus}
+          dateFilter={dateFilter}
         />
       ))}
     </div>
@@ -44,10 +47,11 @@ export function GroupTasksList({
 interface GroupTasksSectionProps {
   group: Group;
   onToggleTaskStatus?: (taskId: number) => void;
+  dateFilter?: { dueDate?: string; dueDateFrom?: string; dueDateTo?: string };
 }
 
-function GroupTasksSection({ group, onToggleTaskStatus }: GroupTasksSectionProps) {
-  const { tasks, loading } = useTaskListByGroup(group.id);
+function GroupTasksSection({ group, onToggleTaskStatus, dateFilter }: GroupTasksSectionProps) {
+  const { tasks, loading } = useTaskListByGroup(group.id, dateFilter);
 
   return (
     <TaskSection

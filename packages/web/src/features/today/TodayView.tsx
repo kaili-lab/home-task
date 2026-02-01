@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,12 +14,21 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
   const { user } = useAuth();
   const { groups } = useApp();
 
-  // 查询个人任务
-  const { tasks: personalTasks, loading: personalLoading } = useTaskListByGroup(null);
+  // 获取今天的日期字符串 YYYY-MM-DD
+  const today = useMemo(() => {
+    const date = new Date();
+    return date.toISOString().split("T")[0];
+  }, []);
 
-  // 查询默认群组任务
+  // 查询个人任务（只显示今天的）
+  const { tasks: personalTasks, loading: personalLoading } = useTaskListByGroup(null, {
+    dueDate: today,
+  });
+
+  // 查询默认群组任务（只显示今天的）
   const { tasks: defaultGroupTasks, loading: defaultGroupLoading } = useTaskListByGroup(
-    user?.defaultGroupId ?? undefined
+    user?.defaultGroupId ?? undefined,
+    { dueDate: today }
   );
 
   // 获取默认群组信息
@@ -108,6 +118,7 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
             groups={createdGroups}
             excludeGroupId={user?.defaultGroupId}
             onToggleTaskStatus={toggleTaskStatus}
+            dateFilter={{ dueDate: today }}
           />
         </TaskSection>
       )}
@@ -122,7 +133,11 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
           defaultExpanded={false}
           showCount={false}
         >
-          <GroupTasksList groups={joinedGroups} onToggleTaskStatus={toggleTaskStatus} />
+          <GroupTasksList 
+            groups={joinedGroups} 
+            onToggleTaskStatus={toggleTaskStatus}
+            dateFilter={{ dueDate: today }}
+          />
         </TaskSection>
       )}
     </section>

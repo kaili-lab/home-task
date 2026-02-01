@@ -1,6 +1,6 @@
 import { useQuery, useQueries } from "@tanstack/react-query";
 import type { Task } from "@/types";
-import type { TaskInfo } from "shared";
+import type { TaskInfo, TaskFilters } from "shared";
 import { getTasks } from "@/services/tasks.api";
 
 /**
@@ -31,11 +31,11 @@ function taskInfoToTask(taskInfo: TaskInfo): Task {
   };
 }
 
-export function useTaskList() {
+export function useTaskList(filters?: TaskFilters) {
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["tasks"],
+    queryKey: ["tasks", filters],
     queryFn: async () => {
-      const result = await getTasks();
+      const result = await getTasks(filters);
       return result.tasks.map(taskInfoToTask);
     },
   });
@@ -54,12 +54,29 @@ export function useTaskList() {
 /**
  * 按群组查询任务列表
  * @param groupId - 群组ID，null表示个人任务，undefined表示不查询
+ * @param dateFilter - 日期过滤条件
  */
-export function useTaskListByGroup(groupId: number | null | undefined) {
+export function useTaskListByGroup(
+  groupId: number | null | undefined,
+  dateFilter?: { dueDate?: string; dueDateFrom?: string; dueDateTo?: string }
+) {
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["tasks", "group", groupId],
+    queryKey: ["tasks", "group", groupId, dateFilter],
     queryFn: async () => {
-      const result = await getTasks({ groupId: groupId === undefined ? undefined : groupId });
+      const filters: TaskFilters = { groupId: groupId === undefined ? undefined : groupId };
+      
+      // 添加日期过滤
+      if (dateFilter?.dueDate) {
+        filters.dueDate = dateFilter.dueDate;
+      }
+      if (dateFilter?.dueDateFrom) {
+        filters.dueDateFrom = dateFilter.dueDateFrom;
+      }
+      if (dateFilter?.dueDateTo) {
+        filters.dueDateTo = dateFilter.dueDateTo;
+      }
+      
+      const result = await getTasks(filters);
       return result.tasks.map(taskInfoToTask);
     },
     enabled: groupId !== undefined, // 只有在groupId不是undefined时才查询（null表示个人任务，需要查询）

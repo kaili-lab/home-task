@@ -35,6 +35,13 @@ export interface TaskFilters {
   assignedTo?: number | "me";
   priority?: Priority;
   excludeRecurringInstances?: boolean; // 是否排除重复任务的子实例
+  
+  // 日期过滤
+  dueDate?: string; // 精确日期 YYYY-MM-DD
+  dueDateFrom?: string; // 日期范围开始 YYYY-MM-DD
+  dueDateTo?: string; // 日期范围结束 YYYY-MM-DD
+  includeNullDueDate?: boolean; // 是否包含 dueDate=NULL 的任务（默认 false）
+  
   page?: number;
   limit?: number;
 }

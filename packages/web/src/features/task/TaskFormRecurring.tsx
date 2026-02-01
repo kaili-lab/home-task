@@ -42,6 +42,25 @@ export function TaskFormRecurring({
         .split("T")[0]
     : "";
 
+  // 计算开始日期后的明天（结束日期的最小值）
+  const minEndDate = startDate
+    ? new Date(new Date(startDate).getTime() + 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0]
+    : "";
+
+  // 计算一年后的日期并格式化为中文
+  const calculateOneYearLater = (dateStr: string): string => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    date.setFullYear(date.getFullYear() + 1);
+    return date.toLocaleDateString("zh-CN", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
   const toggleWeekday = (day: number) => {
     const current = rule.daysOfWeek || [];
     const updated = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
@@ -124,16 +143,22 @@ export function TaskFormRecurring({
 
         {/* 结束日期 */}
         <div>
-          <Label className="text-xs">结束日期（最多1年）</Label>
+          <Label className="text-xs">结束日期（可选，最多1年）</Label>
           <Input
             type="date"
-            min={startDate}
+            min={minEndDate}
             max={maxEndDate}
             value={rule.endDate || ""}
             onChange={(e) => onRuleChange({ ...rule, endDate: e.target.value })}
             className="mt-1"
           />
-          <p className="text-xs text-gray-400 mt-1">结束日期不能超过开始日期一年</p>
+          {!rule.endDate && startDate ? (
+            <p className="text-xs text-orange-600 mt-1">
+              未选择结束日期时，将默认重复至 {calculateOneYearLater(startDate)}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400 mt-1">结束日期必须是明天或以后，且不能超过1年</p>
+          )}
         </div>
       </div>
     </div>
