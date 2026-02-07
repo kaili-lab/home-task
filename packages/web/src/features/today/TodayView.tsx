@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +18,8 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { TaskStatus, Task } from "@/types";
 
 export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const { currentUser } = useCurrentUser();
   const { user } = useAuth();
   const { groups } = useApp();
@@ -31,6 +35,11 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
   const today = useMemo(() => {
     return getTodayLocalDate();
   }, []);
+
+  useEffect(() => {
+    if (location.pathname !== "/today") return;
+    queryClient.refetchQueries({ queryKey: ["tasks"], type: "active" });
+  }, [location.pathname, queryClient]);
 
   // 查询个人任务（只显示今天的）
   const {

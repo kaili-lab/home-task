@@ -5,6 +5,7 @@ export type {
   TaskStatus,
   TaskSource,
   Priority,
+  TimeSegment,
   RecurringFreq,
   RecurringRule,
 } from "./types/common";
@@ -31,4 +32,4 @@ export type { CreateGroupInput, UpdateGroupInput, GroupInfo, GroupDetail } from 
 export type { CreateDeviceInput, DeviceInfo, DeviceTask } from "./api/devices";
 
 // AI相关类型
-export type { MessageInput, AIChatInput, AIChatResponse } from "./api/ai";
+export type { MessageInput, MessageResponse, AIChatInput, AIChatResponse } from "./api/ai";

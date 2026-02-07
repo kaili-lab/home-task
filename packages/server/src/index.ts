@@ -10,6 +10,7 @@ import usersRoutes from "./routes/users.routes";
 import groupsRoutes from "./routes/groups.routes";
 import tasksRoutes from "./routes/tasks.routes";
 import devicesRoutes from "./routes/devices.routes";
+import aiRoutes from "./routes/ai.routes";
 import { DeviceService } from "./services/device.service";
 import { successResponse } from "./utils/route-helpers";
 import { handleServiceError } from "./utils/error-handler";
@@ -84,7 +85,7 @@ app.use("/api/*", requireAuth);
 app.route("/api/users", usersRoutes);
 app.route("/api/groups", groupsRoutes);
 app.route("/api/tasks", tasksRoutes);
-// app.route("/api/ai", aiRoutes);
+app.route("/api/ai", aiRoutes);
 app.route("/api/devices", devicesRoutes);
 
 export default app;

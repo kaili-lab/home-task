@@ -16,11 +16,13 @@ function taskInfoToTask(taskInfo: TaskInfo): Task {
     dueDate: taskInfo.dueDate || undefined,
     startTime: taskInfo.startTime || undefined,
     endTime: taskInfo.endTime || undefined,
-    isAllDay: !taskInfo.startTime && !taskInfo.endTime,
+    timeSegment: taskInfo.timeSegment,
     groupId: taskInfo.groupId || undefined,
     createdBy: taskInfo.createdBy,
     assignedTo: taskInfo.assignedToIds,
+    assignedToNames: taskInfo.assignedToNames,
     completedBy: taskInfo.completedBy || undefined,
+    completedByName: taskInfo.completedByName,
     completedAt: taskInfo.completedAt || undefined,
     source: taskInfo.source,
     isRecurring: taskInfo.isRecurring,
@@ -38,6 +40,10 @@ export function useTaskList(filters?: TaskFilters) {
       const result = await getTasks(filters);
       return result.tasks.map(taskInfoToTask);
     },
+    keepPreviousData: true,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const tasks: Task[] = data || [];
@@ -80,6 +86,10 @@ export function useTaskListByGroup(
       return result.tasks.map(taskInfoToTask);
     },
     enabled: groupId !== undefined, // 只有在groupId不是undefined时才查询（null表示个人任务，需要查询）
+    keepPreviousData: true,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const tasks: Task[] = data || [];

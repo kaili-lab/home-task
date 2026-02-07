@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/hooks/useAuth";
 import { SidebarGroups } from "./SidebarGroups";
@@ -20,12 +21,23 @@ const navItems: { path: string; icon: string; label: string }[] = [
 export function Sidebar({ onCreateGroup }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { currentUser } = useCurrentUser();
   const { signOut } = useAuth();
 
   const handleLogout = async () => {
     await signOut();
     navigate("/login");
+  };
+
+  const handleNav = (path: string) => {
+    if (location.pathname === path) {
+      if (path === "/today" || path === "/week") {
+        queryClient.refetchQueries({ queryKey: ["tasks"], type: "active" });
+      }
+      return;
+    }
+    navigate(path);
   };
 
   return (
@@ -66,7 +78,7 @@ export function Sidebar({ onCreateGroup }: SidebarProps) {
           {navItems.map((item) => (
             <li key={item.path}>
               <button
-                onClick={() => navigate(item.path)}
+                onClick={() => handleNav(item.path)}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
                   location.pathname === item.path

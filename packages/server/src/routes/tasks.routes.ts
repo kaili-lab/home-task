@@ -34,6 +34,18 @@ const createTaskSchema = z.object({
     .regex(/^\d{2}:\d{2}(:\d{2})?$/)
     .nullable()
     .optional(),
+  timeSegment: z
+    .enum([
+      "all_day",
+      "early_morning",
+      "morning",
+      "forenoon",
+      "noon",
+      "afternoon",
+      "evening",
+    ])
+    .nullable()
+    .optional(),
   priority: z.enum(["high", "medium", "low"]).optional(),
   isRecurring: z.boolean().optional(),
   recurringRule: z
@@ -61,6 +73,17 @@ const createTaskSchema = z.object({
 }, {
   message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
   path: ["startTime"],
+}).refine((data) => {
+  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+  const hasTimeSegment = data.timeSegment !== null && data.timeSegment !== undefined;
+  if (hasTimeSegment && (hasStartTime || hasEndTime)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "指定时间段与模糊时间段不可同时存在",
+  path: ["timeSegment"],
 }).refine((data) => {
   // 验证：非重复任务必须有日期
   if (!data.isRecurring && (!data.dueDate || data.dueDate === null)) {
@@ -101,6 +124,18 @@ const updateTaskSchema = z.object({
     .regex(/^\d{2}:\d{2}(:\d{2})?$/)
     .nullable()
     .optional(),
+  timeSegment: z
+    .enum([
+      "all_day",
+      "early_morning",
+      "morning",
+      "forenoon",
+      "noon",
+      "afternoon",
+      "evening",
+    ])
+    .nullable()
+    .optional(),
   priority: z.enum(["high", "medium", "low"]).optional(),
   isRecurring: z.boolean().optional(),
   recurringRule: z
@@ -128,6 +163,17 @@ const updateTaskSchema = z.object({
 }, {
   message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
   path: ["startTime"],
+}).refine((data) => {
+  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+  const hasTimeSegment = data.timeSegment !== null && data.timeSegment !== undefined;
+  if (hasTimeSegment && (hasStartTime || hasEndTime)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "指定时间段与模糊时间段不可同时存在",
+  path: ["timeSegment"],
 });
 
 // 更新任务状态的Zod Schema
@@ -152,6 +198,7 @@ tasksRoutes.post("/", zValidator("json", createTaskSchema), async (c) => {
       dueDate: data.dueDate || null,
       startTime: data.startTime || null,
       endTime: data.endTime || null,
+      timeSegment: data.timeSegment ?? undefined,
       priority: data.priority,
       isRecurring: data.isRecurring,
       recurringRule: data.recurringRule ?? undefined,
@@ -325,6 +372,7 @@ tasksRoutes.patch("/:id", zValidator("json", updateTaskSchema), async (c) => {
       dueDate: data.dueDate !== undefined ? data.dueDate : undefined,
       startTime: data.startTime !== undefined ? data.startTime : undefined,
       endTime: data.endTime !== undefined ? data.endTime : undefined,
+      timeSegment: data.timeSegment !== undefined ? data.timeSegment : undefined,
       priority: data.priority,
       isRecurring: data.isRecurring,
       recurringRule: data.recurringRule,

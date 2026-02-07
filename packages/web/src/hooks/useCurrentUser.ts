@@ -1,5 +1,4 @@
 import { useAuth } from "./useAuth";
-import { mockUsers } from "@/lib/mockData";
 import type { User } from "@/types";
 
 /**
@@ -9,21 +8,45 @@ import type { User } from "@/types";
 export function useCurrentUser() {
   const { user } = useAuth();
 
+  const colorPalette = [
+    "from-orange-400 to-orange-500",
+    "from-blue-400 to-blue-500",
+    "from-green-400 to-green-500",
+    "from-purple-400 to-purple-500",
+    "from-pink-400 to-pink-500",
+    "from-red-400 to-red-500",
+    "from-yellow-400 to-yellow-500",
+    "from-indigo-400 to-indigo-500",
+  ];
+
+  const getUserInitials = (name?: string | null, email?: string | null) => {
+    const base = (name && name.trim()) || (email && email.trim()) || "";
+    return base ? base.charAt(0).toUpperCase() : "?";
+  };
+
+  const getUserColor = (userId: number) => colorPalette[userId % colorPalette.length];
+
   // 将 UserInfo 转换为 User 类型（兼容现有代码）
-  // name字段存储用户昵称（显示名称）
-  const currentUser: User | null = user
+  const currentUser: User = user
     ? {
         id: user.id,
-        name: user.name || user.email.split("@")[0], // 显示名称使用name，如果没有则使用email前缀
+        name: user.name || user.email.split("@")[0],
         email: user.email,
         role: user.role,
-        initials: (user.name || user.email[0]).toUpperCase(), // 使用name，如果没有则使用email首字母
-        color: "from-orange-400 to-orange-500", // 默认颜色
+        initials: getUserInitials(user.name, user.email),
+        color: getUserColor(user.id),
       }
-    : null;
+    : {
+        id: 0,
+        name: "未登录",
+        email: "",
+        role: "guest",
+        initials: "?",
+        color: colorPalette[0],
+      };
 
   return {
-    currentUser: currentUser || mockUsers[0], // 降级到mock数据
-    allUsers: mockUsers, // 暂时保留mock数据
+    currentUser,
+    allUsers: currentUser.id ? [currentUser] : [],
   };
 }

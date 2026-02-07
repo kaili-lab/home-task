@@ -26,3 +26,13 @@ export type RecurringRule = {
   daysOfWeek?: number[]; // weekly 时使用（0=周日, 1=周一...6=周六）
   dayOfMonth?: number; // monthly 时使用（1-31）
 };
+
+// 模糊时间段
+export type TimeSegment =
+  | "all_day"
+  | "early_morning"
+  | "morning"
+  | "forenoon"
+  | "noon"
+  | "afternoon"
+  | "evening";

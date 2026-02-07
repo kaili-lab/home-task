@@ -210,6 +210,7 @@ export class DeviceService {
       dueDate: task.dueDate,
       startTime: task.startTime,
       endTime: task.endTime,
+      timeSegment: task.startTime && task.endTime ? null : (task.timeSegment || "all_day"),
       createdAt: task.createdAt,
     }));
   }

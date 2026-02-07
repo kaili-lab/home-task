@@ -1,4 +1,4 @@
-import type { TaskStatus, TaskSource, Priority, RecurringRule } from "../types/common";
+import type { TaskStatus, TaskSource, Priority, RecurringRule, TimeSegment } from "../types/common";
 
 // 创建任务输入类型
 export interface CreateTaskInput {
@@ -9,6 +9,7 @@ export interface CreateTaskInput {
   dueDate?: string | null;
   startTime?: string | null;
   endTime?: string | null;
+  timeSegment?: TimeSegment | null;
   source?: TaskSource;
   priority?: Priority;
   isRecurring?: boolean;
@@ -23,6 +24,7 @@ export interface UpdateTaskInput {
   dueDate?: string | null;
   startTime?: string | null;
   endTime?: string | null;
+  timeSegment?: TimeSegment | null;
   priority?: Priority;
   isRecurring?: boolean;
   recurringRule?: RecurringRule | null;
@@ -65,6 +67,7 @@ export interface TaskInfo {
   dueDate: string | null;
   startTime: string | null;
   endTime: string | null;
+  timeSegment: TimeSegment | null;
   source: TaskSource;
   isRecurring: boolean;
   recurringRule: RecurringRule | null;

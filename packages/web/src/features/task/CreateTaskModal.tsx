@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -27,9 +26,9 @@ import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/hooks/useAuth";
 import { TaskFormRecurring } from "./TaskFormRecurring";
 import { TaskFormAssignees } from "./TaskFormAssignees";
-import type { Priority, RecurringRule, Task } from "@/types";
+import type { Priority, RecurringRule, Task, TimeSegment } from "@/types";
 import { showToastError } from "@/utils/toast";
-import { formatLocalDate } from "@/utils/date";
+import { formatLocalDate, getTodayLocalDate } from "@/utils/date";
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -62,8 +61,9 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
   const [groupId, setGroupId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [isAllDay, setIsAllDay] = useState(false);
+  const [dueDate, setDueDate] = useState(getTodayLocalDate());
+  const [timeMode, setTimeMode] = useState<"segment" | "range">("segment");
+  const [timeSegment, setTimeSegment] = useState<TimeSegment>("all_day");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
@@ -81,6 +81,53 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return today;
+  };
+
+  const getCurrentTimeSegment = (): TimeSegment => {
+    const hour = new Date().getHours();
+    if (hour >= 0 && hour < 6) return "early_morning";
+    if (hour >= 6 && hour < 9) return "morning";
+    if (hour >= 9 && hour < 12) return "forenoon";
+    if (hour >= 12 && hour < 14) return "noon";
+    if (hour >= 14 && hour < 18) return "afternoon";
+    if (hour >= 18 && hour <= 23) return "evening";
+    return "morning";
+  };
+
+  const getSegmentOrder = (segment: TimeSegment) => {
+    switch (segment) {
+      case "early_morning":
+        return 0;
+      case "morning":
+        return 1;
+      case "forenoon":
+        return 2;
+      case "noon":
+        return 3;
+      case "afternoon":
+        return 4;
+      case "evening":
+        return 5;
+      case "all_day":
+      default:
+        return -1;
+    }
+  };
+
+  const isTodaySelected = () => {
+    if (!dueDate) return false;
+    const today = getToday();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return dueDate === `${yyyy}-${mm}-${dd}`;
+  };
+
+  const isSegmentDisabled = (segment: TimeSegment) => {
+    if (!isTodaySelected()) return false;
+    const current = getCurrentTimeSegment();
+    if (segment === "all_day") return current === "evening";
+    return getSegmentOrder(segment) < getSegmentOrder(current);
   };
 
   // 禁用今天之前的日期
@@ -114,6 +161,12 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
     setGroupId(String(availableGroups[0].id));
   }, [isOpen, groups, user?.defaultGroupId, internalMode]);
 
+  // 创建模式下每次打开弹窗时默认选择今天
+  useEffect(() => {
+    if (!isOpen || internalMode !== "create") return;
+    setDueDate(getTodayLocalDate());
+  }, [isOpen, internalMode]);
+
   // 编辑模式：预填充表单字段
   useEffect(() => {
     if (!isOpen || !editTask) return;
@@ -121,7 +174,9 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
     setTitle(editTask.title);
     setDescription(editTask.description || "");
     setDueDate(editTask.dueDate || "");
-    setIsAllDay(editTask.isAllDay ?? false);
+    const hasRange = !!editTask.startTime && !!editTask.endTime;
+    setTimeMode(hasRange ? "range" : "segment");
+    setTimeSegment(editTask.timeSegment || "all_day");
     setStartTime(editTask.startTime || "");
     setEndTime(editTask.endTime || "");
     setPriority(editTask.priority);
@@ -134,6 +189,14 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
       setRecurringRule(editTask.recurringRule);
     }
   }, [isOpen, editTask]);
+
+  useEffect(() => {
+    if (timeMode !== "segment") return;
+    if (!isTodaySelected()) return;
+    if (isSegmentDisabled(timeSegment)) {
+      setTimeSegment(getCurrentTimeSegment());
+    }
+  }, [timeMode, dueDate, timeSegment]);
 
   // 当群组切换时，清空已选择的成员（让 TaskFormAssignees 重新加载）
   const handleGroupChange = (newGroupId: string) => {
@@ -166,15 +229,13 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
       return;
     }
 
-    // 校验：全天任务和定时任务的二选一关系
-    if (isAllDay) {
-      // 全天任务：不应该有时间
+    // 校验：模糊时间段 / 具体时间段 二选一
+    if (timeMode === "segment") {
       if (startTime || endTime) {
-        showToastError("全天任务不需要指定时间");
+        showToastError("模糊时间段不需要指定具体时间");
         return;
       }
     } else {
-      // 定时任务：必须同时填写开始和结束时间
       if (!startTime || !endTime) {
         showToastError("请同时填写开始时间和结束时间");
         return;
@@ -187,8 +248,9 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
       description: description || undefined,
       // 重复任务不传 dueDate（后端会设为 NULL）
       dueDate: isRecurring ? undefined : (dueDate || undefined),
-      startTime: isAllDay ? undefined : startTime || undefined,
-      endTime: isAllDay ? undefined : endTime || undefined,
+      startTime: timeMode === "range" ? startTime || undefined : undefined,
+      endTime: timeMode === "range" ? endTime || undefined : undefined,
+      timeSegment: timeMode === "segment" ? timeSegment : undefined,
       priority,
       groupId: taskType === "group" && groupId ? Number(groupId) : null,
       assignedToIds: assignedToIds.length > 0 ? assignedToIds : undefined,
@@ -204,7 +266,8 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
     setTitle("");
     setDescription("");
     setDueDate("");
-    setIsAllDay(false);
+    setTimeMode("segment");
+    setTimeSegment("all_day");
     setStartTime("");
     setEndTime("");
     setPriority("medium");
@@ -337,24 +400,70 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
               </Popover>
             </div>
             <div>
-              <Label className="flex items-center gap-2 mb-2">
-                <Checkbox
-                  checked={isAllDay}
-                  onCheckedChange={(v) => {
-                    const checked = !!v;
-                    setIsAllDay(checked);
-                    // 选中全天任务时，清空时间
-                    if (checked) {
-                      setStartTime("");
-                      setEndTime("");
-                    }
-                  }}
-                  disabled={internalMode === "view"}
-                />
-                <span>全天任务</span>
-              </Label>
-              {!isAllDay && (
-                <div className="flex gap-2">
+              <Label className="mb-2">时间类型</Label>
+              <RadioGroup
+                value={timeMode}
+                onValueChange={(v: any) => {
+                  const nextMode = v as "segment" | "range";
+                  setTimeMode(nextMode);
+                  if (nextMode === "segment") {
+                    setStartTime("");
+                    setEndTime("");
+                  }
+                }}
+                className="flex gap-3 mt-2"
+                disabled={internalMode === "view"}
+              >
+                <Label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg cursor-pointer has-checked:border-orange-500 has-checked:bg-orange-50">
+                  <RadioGroupItem value="segment" disabled={internalMode === "view"} />
+                  <span>模糊时间段</span>
+                </Label>
+                <Label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg cursor-pointer has-checked:border-orange-500 has-checked:bg-orange-50">
+                  <RadioGroupItem value="range" disabled={internalMode === "view"} />
+                  <span>具体时间段</span>
+                </Label>
+              </RadioGroup>
+
+              {timeMode === "segment" ? (
+                <div className="mt-3">
+                  <Select
+                    value={timeSegment}
+                    onValueChange={(v) => setTimeSegment(v as TimeSegment)}
+                    disabled={internalMode === "view"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all_day" disabled={isSegmentDisabled("all_day")}>
+                        全天
+                      </SelectItem>
+                      <SelectItem
+                        value="early_morning"
+                        disabled={isSegmentDisabled("early_morning")}
+                      >
+                        凌晨（00:00-05:59）
+                      </SelectItem>
+                      <SelectItem value="morning" disabled={isSegmentDisabled("morning")}>
+                        早上（06:00-08:59）
+                      </SelectItem>
+                      <SelectItem value="forenoon" disabled={isSegmentDisabled("forenoon")}>
+                        上午（09:00-11:59）
+                      </SelectItem>
+                      <SelectItem value="noon" disabled={isSegmentDisabled("noon")}>
+                        中午（12:00-13:59）
+                      </SelectItem>
+                      <SelectItem value="afternoon" disabled={isSegmentDisabled("afternoon")}>
+                        下午（14:00-17:59）
+                      </SelectItem>
+                      <SelectItem value="evening" disabled={isSegmentDisabled("evening")}>
+                        晚上（18:00-23:59）
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex gap-2 mt-3">
                   <Input
                     type="time"
                     value={startTime}

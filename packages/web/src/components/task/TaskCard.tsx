@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { TaskAssignees } from "./TaskAssignees";
 import { RecurringIndicator } from "./RecurringIndicator";
-import { mockUsers } from "@/lib/mockData";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,15 +34,47 @@ const statusStyles: Record<TaskStatus, string> = {
 
 export function TaskCard({ task, onToggle, onEdit, onDelete, onClick }: TaskCardProps) {
   const isCompleted = task.status === "completed";
-  const assignees = mockUsers.filter((u) => task.assignedTo.includes(u.id));
-  const completedByUser = task.completedBy
-    ? mockUsers.find((u) => u.id === task.completedBy)
-    : null;
+  const colorPalette = [
+    "from-orange-400 to-orange-500",
+    "from-blue-400 to-blue-500",
+    "from-green-400 to-green-500",
+    "from-purple-400 to-purple-500",
+    "from-pink-400 to-pink-500",
+    "from-red-400 to-red-500",
+    "from-yellow-400 to-yellow-500",
+    "from-indigo-400 to-indigo-500",
+  ];
+
+  const getUserInitials = (name?: string | null) => {
+    const base = name?.trim() || "";
+    return base ? base.charAt(0).toUpperCase() : "?";
+  };
+
+  const getUserColor = (userId: number) => colorPalette[userId % colorPalette.length];
+
+  const assignees = task.assignedTo.map((userId, index) => {
+    const name = task.assignedToNames?.[index] || `用户${userId}`;
+    return {
+      id: userId,
+      name,
+      email: "",
+      initials: getUserInitials(name),
+      color: getUserColor(userId),
+    };
+  });
+
+  const completedByName =
+    task.completedByName || assignees.find((u) => u.id === task.completedBy)?.name || null;
 
   const formatTime = () => {
-    if (task.isAllDay) return "全天";
     if (task.startTime && task.endTime) return `${task.startTime}-${task.endTime}`;
-    if (task.startTime) return `${task.startTime}前`;
+    if (task.timeSegment === "early_morning") return "凌晨";
+    if (task.timeSegment === "morning") return "早上";
+    if (task.timeSegment === "forenoon") return "上午";
+    if (task.timeSegment === "noon") return "中午";
+    if (task.timeSegment === "afternoon") return "下午";
+    if (task.timeSegment === "evening") return "晚上";
+    if (task.timeSegment === "all_day") return "全天";
     return "";
   };
 
@@ -145,7 +176,7 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onClick }: TaskCard
               {task.status === "completed" && "已完成"}
               {task.status === "cancelled" && "已取消"}
             </Badge>
-            {completedByUser && <span>✅ 由 {completedByUser.name} 完成</span>}
+            {completedByName && <span>✅ 由 {completedByName} 完成</span>}
           </div>
         </div>
 

@@ -1,3 +1,22 @@
+## 重要更新（时间段逻辑）
+
+- 任务时间分为两种模式：具体时间段（startTime + endTime）与模糊时间段（timeSegment）。
+- 模糊时间段取值：all_day / morning / afternoon / evening。
+- 当用户仅描述“上午/下午/晚上/全天”且未提供具体时间段时，系统不追问，直接使用 timeSegment 创建任务。
+- 当用户给出具体时间但不完整（例如“下午4点”），需追问结束时间。
+- startTime/endTime 与 timeSegment 互斥，冲突检测仅适用于具体时间段。
+- 时间段边界（方案 A）：上午 06:00–11:59，下午 12:00–17:59，晚上 18:00–23:59。
+- 仅对“今天”生效的限制：下午不能选上午，晚上不能选上午/下午。
+- 仅对“今天”生效的默认：上午未提及 -> 全天；下午未提及 -> 下午；晚上未提及 -> 晚上。
+
+**数据模型补充：**
+- 新增枚举：time_segment = all_day | morning | afternoon | evening
+- tasks 表新增字段：timeSegment（与 startTime/endTime 互斥）
+- 具体时间段：startTime/endTime 必填，timeSegment 为 NULL
+- 模糊时间段：timeSegment 必填，startTime/endTime 为 NULL
+
+---
+
 ## 目录
 + 1. 项目概述
 + 2. 产品需求
@@ -1179,9 +1198,6 @@ app.post("/api/tasks", async (c) => {
 4. 构建项目
 5. 部署到Cloudflare
 6. 发送通知
-
-
-
 
 
 

@@ -27,6 +27,17 @@ export const taskSourceEnum = pgEnum("task_source", ["ai", "human"]);
 // 任务优先级枚举
 export const priorityEnum = pgEnum("priority", ["high", "medium", "low"]);
 
+// 模糊时间段
+export const timeSegmentEnum = pgEnum("time_segment", [
+  "all_day",
+  "early_morning",
+  "morning",
+  "forenoon",
+  "noon",
+  "afternoon",
+  "evening",
+]);
+
 // 消息类型枚举
 export const messageTypeEnum = pgEnum("message_type", ["text", "task_summary", "question"]);
 
@@ -135,10 +146,11 @@ export const tasks = pgTable("tasks", {
   status: taskStatusEnum("status").notNull().default("pending"), // pending/completed/cancelled
   priority: priorityEnum("priority").notNull().default("medium"),
 
-  // 时间字段（startTime/endTime 为 NULL = 全天任务）
+  // 时间字段（startTime/endTime 与 timeSegment 互斥）
   dueDate: date("dueDate"), // 模板任务可以为 NULL
-  startTime: time("startTime"), // NULL = 全天任务
+  startTime: time("startTime"), // NULL = 使用 timeSegment
   endTime: time("endTime"), // 时间跨度不超过1年
+  timeSegment: timeSegmentEnum("timeSegment"),
 
   // 归属逻辑
   groupId: integer("groupId").references(() => groups.id, { onDelete: "cascade" }),

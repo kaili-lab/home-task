@@ -52,6 +52,13 @@ export async function apiRequest<T>(
   if (!headers.has("Content-Type") && fetchOptions.body instanceof FormData === false) {
     headers.set("Content-Type", "application/json");
   }
+  if (!headers.has("X-Timezone-Offset")) {
+    headers.set("X-Timezone-Offset", String(new Date().getTimezoneOffset()));
+  }
+  if (!headers.has("X-Timezone")) {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (timeZone) headers.set("X-Timezone", timeZone);
+  }
 
   // 发起请求
   // 注意：Better Auth使用Cookie进行认证，浏览器会自动携带Cookie

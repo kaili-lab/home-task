@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm build:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm tsc:*)",
+      "WebSearch",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

@@ -20,6 +20,8 @@ export interface DeviceInfo {
   createdAt: Date;
 }
 
+import type { TimeSegment } from "../types/common";
+
 // 设备任务类型
 export interface DeviceTask {
   id: number;
@@ -29,5 +31,6 @@ export interface DeviceTask {
   dueDate: string | null;
   startTime: string | null;
   endTime: string | null;
+  timeSegment: TimeSegment | null;
   createdAt: Date;
 }

@@ -1,10 +1,11 @@
-import { eq, and, or, isNull, isNotNull, inArray, desc, asc, count, gte, lte } from "drizzle-orm";
+﻿import { eq, and, or, isNull, isNotNull, inArray, desc, asc, count, gte, lte } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { tasks, groupUsers, users, groups, taskAssignments } from "../db/schema";
 import type {
   TaskStatus,
   TaskSource,
   Priority,
+  TimeSegment,
   RecurringRule,
   CreateTaskInput,
   UpdateTaskInput,
@@ -14,11 +15,112 @@ import type {
 } from "shared";
 
 /**
- * 任务Service层
- * 处理任务相关的业务逻辑
+  * 任务Service层 * 处理任务相关的业务逻辑
  */
 export class TaskService {
   constructor(private db: DbInstance) {}
+
+  private getCurrentTimeSegment(): TimeSegment {
+    const hour = new Date().getHours();
+    if (hour >= 0 && hour < 6) return "early_morning";
+    if (hour >= 6 && hour < 9) return "morning";
+    if (hour >= 9 && hour < 12) return "forenoon";
+    if (hour >= 12 && hour < 14) return "noon";
+    if (hour >= 14 && hour < 18) return "afternoon";
+    if (hour >= 18 && hour <= 23) return "evening";
+    return "morning";
+  }
+
+  private getTimeSegmentOrder(segment: TimeSegment): number {
+    switch (segment) {
+      case "early_morning":
+        return 0;
+      case "morning":
+        return 1;
+      case "forenoon":
+        return 2;
+      case "noon":
+        return 3;
+      case "afternoon":
+        return 4;
+      case "evening":
+        return 5;
+      case "all_day":
+      default:
+        return -1;
+    }
+  }
+
+  private formatTimeSegmentLabel(segment: TimeSegment): string {
+    switch (segment) {
+      case "early_morning":
+        return "Early morning";
+      case "morning":
+        return "Morning";
+      case "forenoon":
+        return "Forenoon";
+      case "noon":
+        return "Noon";
+      case "afternoon":
+        return "Afternoon";
+      case "evening":
+        return "Evening";
+      case "all_day":
+      default:
+        return "All day";
+    }
+  }
+
+  private isTodayDate(dateStr?: string | null): boolean {
+    if (!dateStr) return false;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return dateStr === `${yyyy}-${mm}-${dd}`;
+  }
+
+  private validateTimeSegmentForToday(dateStr: string | null, segment: TimeSegment | null) {
+    if (!dateStr || !segment) return;
+    if (!this.isTodayDate(dateStr)) return;
+    const nowSegment = this.getCurrentTimeSegment();
+    if (segment === "all_day") {
+      if (nowSegment === "evening") {
+        throw new Error("It is already evening; cannot set to all-day.");
+      }
+      return;
+    }
+    const nowOrder = this.getTimeSegmentOrder(nowSegment);
+    const targetOrder = this.getTimeSegmentOrder(segment);
+    if (targetOrder < nowOrder) {
+      const nowLabel = this.formatTimeSegmentLabel(nowSegment);
+      const targetLabel = this.formatTimeSegmentLabel(segment);
+      throw new Error(`It is already ${nowLabel}; cannot select ${targetLabel} time segment.`);
+    }
+  }
+
+  private normalizeTimeSegment(value?: TimeSegment | null): TimeSegment | null {
+    if (value === undefined || value === null) return null;
+    if (
+      value === "all_day" ||
+      value === "early_morning" ||
+      value === "morning" ||
+      value === "forenoon" ||
+      value === "noon" ||
+      value === "afternoon" ||
+      value === "evening"
+    ) {
+      return value;
+    }
+    throw new Error("Invalid time segment.");
+  }
+
+  private resolveTimeSegmentForOutput(
+    task: Pick<typeof tasks.$inferSelect, "startTime" | "endTime" | "timeSegment">,
+  ): TimeSegment | null {
+    if (task.startTime && task.endTime) return null;
+    return (task.timeSegment as TimeSegment | null) || "all_day";
+  }
 
   /**
    * 创建任务
@@ -35,11 +137,11 @@ export class TaskService {
       });
 
       if (!membership) {
-        throw new Error("您不是该群组的成员，无法创建群组任务");
+        throw new Error("You are not a member of this group; cannot create a group task.");
       }
     }
 
-    // 验证所有 assignedToIds 存在（如果指定）
+    // 验证所有assignedToIds 存在（如果指定）
     if (data.assignedToIds && data.assignedToIds.length > 0) {
       const assignees = await this.db
         .select({ id: users.id })
@@ -47,7 +149,7 @@ export class TaskService {
         .where(inArray(users.id, data.assignedToIds));
 
       if (assignees.length !== data.assignedToIds.length) {
-        throw new Error("部分被分配的用户不存在");
+        throw new Error("Some assigned users do not exist.");
       }
 
       // 如果是群组任务，验证所有被分配者都是群组成员
@@ -64,29 +166,48 @@ export class TaskService {
           );
 
         if (memberships.length !== data.assignedToIds.length) {
-          throw new Error("部分被分配的用户不是该群组的成员");
+          throw new Error("Some assignees are not members of this group.");
         }
       }
     }
 
     // 验证时间逻辑：startTime 和 endTime 必须同时存在或同时为空（二选一）
-    const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+    const hasStartTime =
+      data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
     const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
     const hasBothTimes = hasStartTime && hasEndTime;
     const hasNoTimes = !hasStartTime && !hasEndTime;
-    
-    // 必须是"两个都有"或"两个都没有"（二选一）
+
+    // 必须是两个都有或两个都没有（二选一）
     if (!hasBothTimes && !hasNoTimes) {
-      throw new Error("开始时间和结束时间必须同时填写");
+      throw new Error("startTime and endTime must be provided together.");
     }
+
+    const normalizedTimeSegment = this.normalizeTimeSegment(data.timeSegment);
+    if (hasBothTimes && normalizedTimeSegment) {
+      throw new Error("Cannot specify both an exact time range and a time segment.");
+    }
+
+    const finalTimeSegment = hasNoTimes ? normalizedTimeSegment || "all_day" : null;
+    const normalizedData: CreateTaskInput = {
+      ...data,
+      startTime: hasBothTimes ? data.startTime || null : null,
+      endTime: hasBothTimes ? data.endTime || null : null,
+      timeSegment: finalTimeSegment,
+    };
+
+    this.validateTimeSegmentForToday(
+      normalizedData.dueDate || null,
+      normalizedData.timeSegment || null,
+    );
 
     // 重复任务逻辑
     if (data.isRecurring && data.recurringRule) {
       // 验证重复规则
       this.validateRecurringRule(data.recurringRule);
-      
+
       // 创建模板 + 生成实例（事务）
-      return await this.createRecurringTask(userId, data);
+      return await this.createRecurringTask(userId, normalizedData);
     }
 
     // 一次性任务逻辑
@@ -94,15 +215,16 @@ export class TaskService {
     const result = (await this.db
       .insert(tasks)
       .values({
-        title: data.title,
-        description: data.description || null,
-        groupId: data.groupId || null,
+        title: normalizedData.title,
+        description: normalizedData.description || null,
+        groupId: normalizedData.groupId || null,
         createdBy: userId,
-        dueDate: data.dueDate || null,
-        startTime: data.startTime || null,
-        endTime: data.endTime || null,
-        source: data.source || "human",
-        priority: data.priority || "medium",
+        dueDate: normalizedData.dueDate || null,
+        startTime: normalizedData.startTime || null,
+        endTime: normalizedData.endTime || null,
+        timeSegment: normalizedData.timeSegment || null,
+        source: normalizedData.source || "human",
+        priority: normalizedData.priority || "medium",
         isRecurring: false,
         recurringRule: null,
         recurringParentId: null,
@@ -112,7 +234,7 @@ export class TaskService {
 
     const task = result[0];
     if (!task) {
-      throw new Error("创建任务失败");
+      throw new Error("Failed to create task.");
     }
 
     // 创建任务分配记录
@@ -133,7 +255,7 @@ export class TaskService {
    * 验证重复规则
    */
   private validateRecurringRule(rule: RecurringRule): void {
-    // 1. 如果未指定结束条件，默认设置为1年后
+    // 1. 如果未指定结束条件，默认设置一年后
     if (!rule.endDate && !rule.endAfterOccurrences) {
       const startDate = new Date(rule.startDate);
       const oneYearLater = new Date(startDate);
@@ -143,22 +265,22 @@ export class TaskService {
 
     // 2. 开始日期必填
     if (!rule.startDate) {
-      throw new Error("重复任务必须指定开始日期");
+      throw new Error("Recurring tasks must specify a start date.");
     }
 
     // 3. weekly 必须指定 daysOfWeek
     if (rule.freq === "weekly" && (!rule.daysOfWeek || rule.daysOfWeek.length === 0)) {
-      throw new Error("每周重复任务必须选择至少一个星期");
+      throw new Error("Weekly recurring tasks must specify daysOfWeek.");
     }
 
     // 4. monthly 必须指定 dayOfMonth
     if (rule.freq === "monthly" && !rule.dayOfMonth) {
-      throw new Error("每月重复任务必须指定日期");
+      throw new Error("Monthly recurring tasks must specify dayOfMonth.");
     }
 
     // 5. 限制最大生成数量（365天或365次）
     if (rule.endAfterOccurrences && rule.endAfterOccurrences > 365) {
-      throw new Error("重复次数不能超过365次");
+      throw new Error("Recurring occurrences cannot exceed 365.");
     }
 
     // 6. 验证结束日期
@@ -170,17 +292,17 @@ export class TaskService {
 
       // 6.1 结束日期不能是今天或之前的日期
       if (endDate <= today) {
-        throw new Error("重复任务结束日期必须是明天或以后的日期");
+        throw new Error("Recurring task end date must be tomorrow or later.");
       }
 
       // 6.2 时间跨度不超过1年
       const startDate = new Date(rule.startDate);
       const diffDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
       if (diffDays > 365) {
-        throw new Error("重复任务时间跨度不能超过1年");
+        throw new Error("Recurring task span cannot exceed 1 year.");
       }
       if (diffDays < 0) {
-        throw new Error("结束日期必须晚于开始日期");
+        throw new Error("End date must be after start date.");
       }
     }
   }
@@ -190,13 +312,13 @@ export class TaskService {
    */
   private formatDate(date: Date): string {
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   }
 
   /**
-   * 创建重复任务（模板+实例）
+   * 创建重复任务（模板 + 实例）
    */
   private async createRecurringTask(userId: number, data: CreateTaskInput): Promise<TaskInfo> {
     // Step 1: 创建模板任务（dueDate = NULL）
@@ -207,9 +329,10 @@ export class TaskService {
         description: data.description || null,
         groupId: data.groupId || null,
         createdBy: userId,
-        dueDate: null, // 模板的 dueDate 必须为 NULL
+        dueDate: null, // 模板的dueDate 必须为NULL
         startTime: data.startTime || null,
         endTime: data.endTime || null,
+        timeSegment: data.timeSegment || null,
         source: data.source || "human",
         priority: data.priority || "medium",
         isRecurring: true,
@@ -221,31 +344,34 @@ export class TaskService {
 
     const template = templateResult[0];
     if (!template) {
-      throw new Error("创建重复任务模板失败");
+      throw new Error("Failed to create recurring task template.");
     }
 
-    // Step 2: 计算实例日期列表
+    // Step 2: Build the instance date list.
     const instanceDates = this.calculateInstanceDates(data.recurringRule!);
 
-    // Step 3: 批量生成实例任务
+    // Step 3: Bulk create instance tasks.
     if (instanceDates.length > 0) {
-      await this.db.insert(tasks).values(
-        instanceDates.map((date) => ({
-          title: data.title,
-          description: data.description || null,
-          groupId: data.groupId || null,
-          createdBy: userId,
-          dueDate: date, // 实例的 dueDate 是具体日期
-          startTime: data.startTime || null,
-          endTime: data.endTime || null,
-          source: data.source || "human",
-          priority: data.priority || "medium",
-          isRecurring: false, // 实例的 isRecurring 为 false
-          recurringRule: null, // 实例不存储规则
-          recurringParentId: template.id, // 指向模板
-          status: "pending",
-        }))
-      );
+      const instanceRows: Array<typeof tasks.$inferInsert> = instanceDates.map((date) => ({
+        title: data.title,
+        description: data.description || null,
+        groupId: data.groupId || null,
+        createdBy: userId,
+        // 实例的 dueDate 是具体日期
+        dueDate: date,
+        startTime: data.startTime || null,
+        endTime: data.endTime || null,
+        timeSegment: data.timeSegment || null,
+        source: data.source || "human",
+        priority: data.priority || "medium",
+        isRecurring: false, // Instances are non-recurring.
+        // Instances do not store a rule.
+        recurringRule: null,
+        // Link to template.
+        recurringParentId: template.id,
+        status: "pending",
+      }));
+      await this.db.insert(tasks).values(instanceRows);
     }
 
     // Step 4: 创建任务分配（应用到模板和所有实例）
@@ -263,7 +389,7 @@ export class TaskService {
         data.assignedToIds!.map((assigneeUserId) => ({
           taskId,
           userId: assigneeUserId,
-        }))
+        })),
       );
 
       await this.db.insert(taskAssignments).values(assignments);
@@ -274,8 +400,7 @@ export class TaskService {
   }
 
   /**
-   * 计算重复任务的实例日期列表
-   */
+   * 计算重复任务的实例日期列表 */
   private calculateInstanceDates(rule: RecurringRule): string[] {
     const dates: string[] = [];
     const startDate = new Date(rule.startDate);
@@ -307,7 +432,7 @@ export class TaskService {
       if (shouldAdd) {
         const dateStr = this.formatDate(currentDate);
 
-        // 检查是否超过 endDate
+        // 检查是否超过endDate
         if (rule.endDate && dateStr > rule.endDate) {
           break;
         }
@@ -333,7 +458,8 @@ export class TaskService {
    */
   async getTasks(userId: number, filters: TaskFilters = {}): Promise<TaskListResult> {
     const page = filters.page || 1;
-    const limit = Math.min(filters.limit || 20, 100); // 最多100条
+    const limit = Math.min(filters.limit || 20, 100);
+    // 最多100条
     const offset = (page - 1) * limit;
 
     // 获取用户所在的所有群组ID
@@ -406,10 +532,7 @@ export class TaskService {
       // 日期范围查询
       if (filters.dueDateFrom && filters.dueDateTo) {
         conditions.push(
-          and(
-            gte(tasks.dueDate, filters.dueDateFrom),
-            lte(tasks.dueDate, filters.dueDateTo),
-          ),
+          and(gte(tasks.dueDate, filters.dueDateFrom), lte(tasks.dueDate, filters.dueDateTo)),
         );
       } else if (filters.dueDateFrom) {
         conditions.push(gte(tasks.dueDate, filters.dueDateFrom));
@@ -418,8 +541,7 @@ export class TaskService {
       }
     }
 
-    // 排除模板任务（dueDate IS NOT NULL）
-    // 除非明确指定 includeNullDueDate=true
+    // 排除模板任务（dueDate IS NOT NULL），除非明确指定 includeNullDueDate=true
     if (!filters.includeNullDueDate) {
       conditions.push(isNotNull(tasks.dueDate));
     }
@@ -512,16 +634,17 @@ export class TaskService {
         assignedToNames: assignedNames,
         completedBy: task.completedBy,
         completedByName: task.completedBy ? userMap.get(task.completedBy) || null : null,
-        completedAt: task.completedAt,
+        completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
         dueDate: task.dueDate,
         startTime: task.startTime,
         endTime: task.endTime,
+        timeSegment: this.resolveTimeSegmentForOutput(task),
         source: task.source as TaskSource,
         isRecurring: task.isRecurring,
         recurringRule: task.recurringRule as RecurringRule | null,
         recurringParentId: task.recurringParentId,
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
+        createdAt: new Date(task.createdAt).toISOString(),
+        updatedAt: new Date(task.updatedAt).toISOString(),
       };
     });
 
@@ -545,7 +668,7 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new Error("任务不存在");
+      throw new Error("Task not found.");
     }
 
     // 验证用户有权限查看（创建者或群组成员）
@@ -560,10 +683,10 @@ export class TaskService {
         });
 
         if (!membership) {
-          throw new Error("您无权查看此任务");
+          throw new Error("You do not have permission to view this task.");
         }
       } else {
-        throw new Error("您无权查看此任务");
+        throw new Error("You do not have permission to view this task.");
       }
     }
 
@@ -621,16 +744,17 @@ export class TaskService {
       assignedToNames: assignedNames,
       completedBy: task.completedBy,
       completedByName: completer?.name || null,
-      completedAt: task.completedAt,
+      completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
       dueDate: task.dueDate,
       startTime: task.startTime,
       endTime: task.endTime,
+      timeSegment: this.resolveTimeSegmentForOutput(task),
       source: task.source as TaskSource,
       isRecurring: task.isRecurring,
       recurringRule: task.recurringRule as RecurringRule | null,
       recurringParentId: task.recurringParentId,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt,
+      createdAt: new Date(task.createdAt).toISOString(),
+      updatedAt: new Date(task.updatedAt).toISOString(),
     };
   }
 
@@ -644,14 +768,14 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new Error("任务不存在");
+      throw new Error("Task not found.");
     }
 
     if (task.createdBy !== userId) {
-      throw new Error("只有创建者可以更新任务");
+      throw new Error("Only the creator can update this task.");
     }
 
-    // 验证所有 assignedToIds（如果指定）
+    // 验证所有assignedToIds（如果指定）
     if (
       data.assignedToIds !== undefined &&
       data.assignedToIds !== null &&
@@ -663,7 +787,7 @@ export class TaskService {
         .where(inArray(users.id, data.assignedToIds));
 
       if (assignees.length !== data.assignedToIds.length) {
-        throw new Error("部分被分配的用户不存在");
+        throw new Error("Some assigned users do not exist.");
       }
 
       // 如果是群组任务，验证被分配者也是群组成员
@@ -680,7 +804,7 @@ export class TaskService {
           );
 
         if (memberships.length !== data.assignedToIds.length) {
-          throw new Error("部分被分配的用户不是该群组的成员");
+          throw new Error("Some assignees are not members of this group.");
         }
       }
     }
@@ -695,12 +819,37 @@ export class TaskService {
     if (data.dueDate !== undefined) {
       updateData.dueDate = data.dueDate;
     }
-    if (data.startTime !== undefined) {
-      updateData.startTime = data.startTime;
+    const hasStartTime =
+      data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+    const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+    const hasBothTimes = hasStartTime && hasEndTime;
+    const hasNoTimes = !hasStartTime && !hasEndTime;
+
+    if (!hasBothTimes && !hasNoTimes) {
+      throw new Error("startTime and endTime must be provided together.");
     }
-    if (data.endTime !== undefined) {
-      updateData.endTime = data.endTime;
+
+    if (data.startTime !== undefined || data.endTime !== undefined) {
+      updateData.startTime = hasBothTimes ? data.startTime : null;
+      updateData.endTime = hasBothTimes ? data.endTime : null;
+      updateData.timeSegment = hasBothTimes ? null : "all_day";
     }
+
+    if (data.timeSegment !== undefined) {
+      if (data.startTime !== undefined || data.endTime !== undefined) {
+        throw new Error("Cannot specify both an exact time range and a time segment.");
+      }
+      const normalizedTimeSegment = this.normalizeTimeSegment(data.timeSegment);
+      updateData.timeSegment = normalizedTimeSegment || "all_day";
+      updateData.startTime = null;
+      updateData.endTime = null;
+    }
+    const effectiveDate = data.dueDate !== undefined ? data.dueDate : task.dueDate;
+    const effectiveSegment =
+      updateData.timeSegment !== undefined
+        ? (updateData.timeSegment as TimeSegment | null)
+        : task.timeSegment;
+    this.validateTimeSegmentForToday(effectiveDate, effectiveSegment || null);
     if (data.priority !== undefined) {
       updateData.priority = data.priority;
     }
@@ -734,15 +883,14 @@ export class TaskService {
   }
 
   /**
-   * 更新任务状态
-   */
+   * 更新任务状态   */
   async updateTaskStatus(taskId: number, userId: number, status: TaskStatus): Promise<TaskInfo> {
     const task = await this.db.query.tasks.findFirst({
       where: eq(tasks.id, taskId),
     });
 
     if (!task) {
-      throw new Error("任务不存在");
+      throw new Error("Task not found.");
     }
 
     // 验证用户有权限（创建者或群组成员）
@@ -757,10 +905,10 @@ export class TaskService {
         });
 
         if (!membership) {
-          throw new Error("您无权修改此任务");
+          throw new Error("You do not have permission to modify this task.");
         }
       } else {
-        throw new Error("您无权修改此任务");
+        throw new Error("You do not have permission to modify this task.");
       }
     }
 
@@ -793,12 +941,12 @@ export class TaskService {
     });
 
     if (!task) {
-      throw new Error("任务不存在");
+      throw new Error("Task not found.");
     }
 
     // 验证用户是创建者
     if (task.createdBy !== userId) {
-      throw new Error("只有创建者可以删除任务");
+      throw new Error("Only the creator can delete this task.");
     }
 
     await this.db.delete(tasks).where(eq(tasks.id, taskId));

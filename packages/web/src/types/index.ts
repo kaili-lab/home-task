@@ -1,6 +1,14 @@
-import type { TaskStatus, Priority, TaskSource, RecurringRule } from "shared";
+import type { TaskStatus, Priority, TaskSource, RecurringRule, TaskInfo, TimeSegment } from "shared";
 import type { UserGroup } from "shared";
-export type { TaskStatus, Priority, TaskSource, RecurringFreq, RecurringRule } from "shared";
+export type {
+  TaskStatus,
+  Priority,
+  TaskSource,
+  RecurringFreq,
+  RecurringRule,
+  TaskInfo,
+  TimeSegment,
+} from "shared";
 
 export interface Task {
   id: number;
@@ -11,11 +19,13 @@ export interface Task {
   dueDate?: string;
   startTime?: string;
   endTime?: string;
-  isAllDay?: boolean;
+  timeSegment?: TimeSegment | null;
   groupId?: number;
   createdBy: number;
   assignedTo: number[];
+  assignedToNames?: string[];
   completedBy?: number;
+  completedByName?: string | null;
   completedAt?: string;
   source: TaskSource;
   isRecurring: boolean;
@@ -48,6 +58,11 @@ export interface ChatMessage {
   role: "user" | "ai";
   content: string;
   timestamp: string;
+  type?: "text" | "task_summary" | "question";
+  payload?: {
+    task?: TaskInfo;
+    conflictingTasks?: TaskInfo[];
+  };
 }
 
 export type TabType = "today" | "week" | "ai" | "group" | "profile";

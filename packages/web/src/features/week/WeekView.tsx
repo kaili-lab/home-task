@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,11 +31,13 @@ function taskInfoToTask(taskInfo: TaskInfo): Task {
     dueDate: taskInfo.dueDate || undefined,
     startTime: taskInfo.startTime || undefined,
     endTime: taskInfo.endTime || undefined,
-    isAllDay: !taskInfo.startTime && !taskInfo.endTime,
+    timeSegment: taskInfo.timeSegment,
     groupId: taskInfo.groupId || undefined,
     createdBy: taskInfo.createdBy,
     assignedTo: taskInfo.assignedToIds,
+    assignedToNames: taskInfo.assignedToNames,
     completedBy: taskInfo.completedBy || undefined,
+    completedByName: taskInfo.completedByName,
     completedAt: taskInfo.completedAt || undefined,
     source: taskInfo.source,
     isRecurring: taskInfo.isRecurring,
@@ -46,6 +49,8 @@ function taskInfoToTask(taskInfo: TaskInfo): Task {
 }
 
 export function WeekView({ onCreateTask }: WeekViewProps) {
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const { groups } = useApp();
   const { user } = useAuth();
 
@@ -77,6 +82,11 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
       to: formatLocalDate(sunday),
     };
   }, [weekDays]);
+
+  useEffect(() => {
+    if (location.pathname !== "/week") return;
+    queryClient.refetchQueries({ queryKey: ["tasks"], type: "active" });
+  }, [location.pathname, queryClient]);
 
   // 查询个人任务（本周日期范围）
   const {
@@ -122,6 +132,10 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
         };
       },
       enabled: weekRange.from !== "" && weekRange.to !== "",
+      keepPreviousData: true,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      staleTime: 0,
     })),
   });
 

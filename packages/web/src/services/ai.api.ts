@@ -2,7 +2,7 @@ import { apiGet, apiPost } from "@/lib/api-client";
 import type {
   AIChatInput,
   AIChatResponse,
-  MessageInput,
+  MessageResponse,
 } from "shared";
 
 /**
@@ -40,7 +40,7 @@ export async function chat(
     // 流式返回：使用EventSource
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
     const url = `${API_BASE_URL}/api/ai/chat?stream=true`;
-    
+
     // 注意：EventSource只支持GET请求，但我们需要POST
     // 所以需要使用fetch的stream模式
     const response = await fetch(url, {
@@ -70,7 +70,7 @@ export async function chat(
  * 获取对话历史
  */
 export async function getMessages(limit: number = 20) {
-  const response = await apiGet<{ messages: MessageInput[] }>(
+  const response = await apiGet<{ messages: MessageResponse[] }>(
     `/api/ai/messages?limit=${Math.min(limit, 100)}`
   );
   return response.data.messages;

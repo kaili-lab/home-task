@@ -7,20 +7,21 @@ import { Mic, Send } from "lucide-react";
 interface ChatInputProps {
   onSend: (content: string) => void;
   onVoice: () => void;
+  isLoading?: boolean;
 }
 
-export function ChatInput({ onSend, onVoice }: ChatInputProps) {
+export function ChatInput({ onSend, onVoice, isLoading }: ChatInputProps) {
   const [input, setInput] = useState("");
 
   const handleSend = () => {
-    if (input.trim()) {
+    if (input.trim() && !isLoading) {
       onSend(input);
       setInput("");
     }
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !isLoading) {
       e.preventDefault();
       handleSend();
     }
@@ -47,10 +48,10 @@ export function ChatInput({ onSend, onVoice }: ChatInputProps) {
         <Button
           onClick={handleSend}
           size="icon"
-          disabled={!input.trim()}
+          disabled={!input.trim() || isLoading}
           className="rounded-full bg-orange-500 hover:bg-orange-600"
         >
-          <Send className="w-5 h-5" />
+          {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send className="w-5 h-5" />}
         </Button>
       </div>
     </div>

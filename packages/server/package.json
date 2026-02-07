@@ -5,10 +5,16 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "db-push": "npx drizzle-kit push"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
+    "@langchain/core": "^1.1.18",
+    "@langchain/openai": "^1.2.4",
     "@neondatabase/serverless": "^1.0.2",
     "better-auth": "^1.4.18",
     "dotenv": "^17.2.3",
@@ -21,9 +27,12 @@
   },
   "devDependencies": {
     "@hono/eslint-config": "^2.0.5",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@vitest/ui": "^1.1.0",
     "drizzle-kit": "^0.31.8",
     "eslint-config-prettier": "^10.1.8",
     "typescript-eslint": "^8.53.1",
+    "vitest": "^1.1.0",
     "wrangler": "^4.4.0"
   }
 }

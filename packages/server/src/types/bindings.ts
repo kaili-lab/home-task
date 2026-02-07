@@ -12,6 +12,7 @@ export type Bindings = {
   OPENAI_API_KEY?: string;
   AIHUBMIX_API_KEY?: string;
   AIHUBMIX_BASE_URL?: string;
+  AIHUBMIX_MODEL_NAME?: string;
 
   // Google OAuth 配置（可选）
   GOOGLE_CLIENT_ID?: string;
