@@ -5,7 +5,12 @@
       "Bash(pnpm test:*)",
       "Bash(pnpm tsc:*)",
       "WebSearch",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(del \"D:\\\\web\\\\my-projects\\\\home-task\\\\packages\\\\server\\\\src\\\\__tests__\\\\ai.integration.test.ts\")",
+      "Bash(node -e:*)",
+      "Bash(npx vitest:*)",
+      "Bash(taskkill:*)",
+      "Bash(curl:*)"
     ]
   }
 }

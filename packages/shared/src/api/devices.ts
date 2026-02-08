@@ -17,7 +17,8 @@ export interface DeviceInfo {
   groupId: number | null;
   groupName: string | null;
   status: string;
-  createdAt: Date;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  createdAt: string;
 }
 
 import type { TimeSegment } from "../types/common";
@@ -32,5 +33,6 @@ export interface DeviceTask {
   startTime: string | null;
   endTime: string | null;
   timeSegment: TimeSegment | null;
-  createdAt: Date;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  createdAt: string;
 }

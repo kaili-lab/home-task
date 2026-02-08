@@ -26,7 +26,7 @@ const TOOL_DEFINITIONS = [
     function: {
       name: "create_task",
       description:
-        "创建一个新任务。当用户明确要求创建任务且信息充分时调用。若用户未指定日期，默认今天；若用户仅提到模糊时间段（全天/凌晨/早上/上午/中午/下午/晚上）且无具体时间，直接传 timeSegment，不追问时间。",
+        "创建一个新任务。当用户明确要求创建任务且信息充分时调用。若用户未指定日期，强制默认今天；若用户仅提到模糊时间段（全天/凌晨/早上/上午/中午/下午/晚上）且无具体时间，直接传 timeSegment，不追问时间。",
       parameters: {
         type: "object",
         properties: {
@@ -207,6 +207,8 @@ type ResultCapture = {
   conflictingTasks?: TaskInfo[];
   actionPerformed?: ToolActionType;
   responseTypeOverride?: "text" | "task_summary" | "question";
+  // 用于在时间不合理时强制追问并中止后续 LLM 回合，避免模型擅自纠正
+  forcedReply?: string;
 };
 
 // ==================== AIService ====================
@@ -345,7 +347,7 @@ ${groupsList}
 从用户的自然语言描述中推理出任务字段：
 - **title**：简洁的动作短语（如"去4S店取车"、"开家长会"）
 - **description**：title 无法涵盖的补充信息（如地点、注意事项）；用户未提及则省略
-- **dueDate**：用户未指定日期时，默认今天（${today}）
+- **dueDate**：用户未指定日期时，强制默认今天（${today}），不得擅自推断为其他日期
 - **priority**：用户未指定时不传
 
 ## 二、时间处理
@@ -370,6 +372,8 @@ ${groupsList}
 - 用户既没说具体时间也没说模糊时间段时：
   - 任务日期是今天且当前已是晚上 → 传 timeSegment = evening
   - 其他情况 → 传 timeSegment = all_day
+- 若任务日期是今天且用户给出的时间段或具体时间已过，必须追问确认，不能自动纠正
+- 模糊时间段判断以用户原话为准，不得自行替换
 
 两种模式互斥：有具体时间时不传 timeSegment，有 timeSegment 时不传 startTime/endTime。
 
@@ -740,6 +744,18 @@ ${groupsList}
   private getUserNow(): Date {
     return new Date(Date.now() - this.timezoneOffsetMinutes * 60 * 1000);
   }
+
+  // 作用：把时间字符串转为当天分钟数，避免重复解析导致“已过”判断不一致
+  private parseTimeToMinutes(time?: string | null): number | null {
+    if (!time) return null;
+    const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(time.trim());
+    if (!match) return null;
+    const hours = Number.parseInt(match[1], 10);
+    const minutes = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+    return hours * 60 + minutes;
+  }
   // 作用：将日期映射为中文星期标签
   private getWeekdayLabel(date: Date): string {
     const labels = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -776,6 +792,23 @@ ${groupsList}
     const currentOrder = this.getTimeSegmentOrder(current);
     const targetOrder = this.getTimeSegmentOrder(segment);
     return targetOrder >= currentOrder;
+  }
+
+  // 作用：判断今天的具体时间段是否已过，防止模型在不合理时间直接创建
+  private isTimeRangePassedForToday(
+    dateStr: string,
+    startTime?: string | null,
+    endTime?: string | null,
+  ): boolean {
+    if (!this.isTodayDate(dateStr)) return false;
+    const startMinutes = this.parseTimeToMinutes(startTime);
+    const endMinutes = this.parseTimeToMinutes(endTime);
+    if (startMinutes === null || endMinutes === null) return false;
+    // 避免跨天或异常范围误判为“已过”
+    if (endMinutes < startMinutes) return false;
+    const now = this.getUserNow();
+    const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    return endMinutes <= nowMinutes;
   }
   // 作用：生成“时段不可选”的用户提示文案
   private buildSegmentNotAllowedMessage(target: TimeSegment): string {
@@ -942,22 +975,41 @@ ${groupsList}
         const hasExplicitTime =
           this.hasExplicitTimeRange(userMessage) || this.hasExplicitTimePoint(userMessage);
         const hasSegmentHint = this.hasTimeSegmentHint(userMessage);
+        const hasDateHint = this.hasDateHint(userMessage);
+        // 用户未提及日期时强制按“今天”处理，避免模型自行推断造成偏差
+        const effectiveDueDate = hasDateHint && dueDate ? dueDate : this.getTodayDate();
+        const hintedSegment = hasSegmentHint ? this.inferTimeSegmentFromText(userMessage) : null;
+
+        if (hintedSegment && !this.isSegmentAllowedForToday(effectiveDueDate, hintedSegment)) {
+          const content = this.buildSegmentNotAllowedMessage(hintedSegment);
+          resultCapture.forcedReply = content;
+          resultCapture.responseTypeOverride = "question";
+          return content;
+        }
+
+        if (hasTimeRange && this.isTimeRangePassedForToday(effectiveDueDate, startTime, endTime)) {
+          const content = `今天已过你提到的时间段（${startTime}-${endTime}）。请确认是否改到今天稍后或明天，或提供新的时间段。`;
+          resultCapture.forcedReply = content;
+          resultCapture.responseTypeOverride = "question";
+          return content;
+        }
+
         let finalTimeSegment = hasTimeRange
           ? null
           : timeSegment || this.inferTimeSegmentFromText(userMessage);
 
         if (!hasTimeRange && !timeSegment && !hasSegmentHint && !hasExplicitTime) {
           // 用户没给任何时间线索时，使用可解释的默认策略，避免反复追问
-          finalTimeSegment = this.getDefaultTimeSegmentForDate(dueDate);
+          finalTimeSegment = this.getDefaultTimeSegmentForDate(effectiveDueDate);
         }
 
-        if (finalTimeSegment && !this.isSegmentAllowedForToday(dueDate, finalTimeSegment)) {
+        if (finalTimeSegment && !this.isSegmentAllowedForToday(effectiveDueDate, finalTimeSegment)) {
           // 今天已过时段时直接提示，避免创建无意义任务
           return this.buildSegmentNotAllowedMessage(finalTimeSegment);
         }
 
         const skipSemanticConflictCheck = options?.skipSemanticConflictCheck === true;
-        const tasksForDate = await this.getTasksForDate(userId, dueDate);
+        const tasksForDate = await this.getTasksForDate(userId, effectiveDueDate);
         const timeConflicts =
           startTime && endTime ? this.filterTimeConflicts(tasksForDate, startTime, endTime) : [];
         const semanticConflicts = skipSemanticConflictCheck
@@ -1000,7 +1052,7 @@ ${groupsList}
         const task = await taskService.createTask(userId, {
           title,
           description,
-          dueDate,
+          dueDate: effectiveDueDate,
           startTime: hasTimeRange ? startTime : null,
           endTime: hasTimeRange ? endTime : null,
           timeSegment: finalTimeSegment,
@@ -1300,6 +1352,13 @@ ${groupsList}
             }),
           );
           throw error;
+        }
+        if (resultCapture.forcedReply) {
+          // 需要追问时直接返回，避免继续回到 LLM 导致自动纠正或误创建
+          const content = resultCapture.forcedReply;
+          await this.saveMessage(userId, "user", message);
+          await this.saveMessage(userId, "assistant", content, "question");
+          return { content, type: "question" };
         }
         // 工具调用必须包含 ID，用于将结果关联回工具调用
         const toolId = toolCall.id || `tool_${Date.now()}_${Math.random()}`;

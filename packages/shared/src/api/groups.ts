@@ -18,8 +18,10 @@ export interface GroupInfo {
   name: string;
   inviteCode: string;
   avatar: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  createdAt: string;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  updatedAt: string;
 }
 
 // 群组详情类型（包含成员列表）
@@ -28,6 +30,7 @@ export interface GroupDetail extends GroupInfo {
     userId: number;
     name: string | null;
     role: string;
-    joinedAt: Date;
+    // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+    joinedAt: string;
   }>;
 }

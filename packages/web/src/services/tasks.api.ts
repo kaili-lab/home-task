@@ -7,13 +7,32 @@ import type {
   TaskFilters,
   TaskStatus,
 } from "shared";
+import { formatLocalDateTime } from "@/utils/date";
+
+function mapTaskInfoTimes(task: TaskInfo): TaskInfo {
+  // 在接口层统一格式化时间，避免组件重复处理导致格式不一致
+  const createdAt = formatLocalDateTime(task.createdAt) ?? task.createdAt;
+  const updatedAt = formatLocalDateTime(task.updatedAt) ?? task.updatedAt;
+  const completedAt = task.completedAt
+    ? formatLocalDateTime(task.completedAt) ?? task.completedAt
+    : null;
+  return { ...task, createdAt, updatedAt, completedAt };
+}
+
+function mapTaskListResultTimes(result: TaskListResult): TaskListResult {
+  // 统一在进入 UI 前转换，保证列表与详情时间展示一致
+  return {
+    ...result,
+    tasks: result.tasks.map(mapTaskInfoTimes),
+  };
+}
 
 /**
  * 创建任务
  */
 export async function createTask(data: CreateTaskInput) {
   const response = await apiPost<TaskInfo>("/api/tasks", data);
-  return response.data;
+  return mapTaskInfoTimes(response.data);
 }
 
 /**
@@ -44,7 +63,7 @@ export async function getTasks(filters?: TaskFilters) {
   const endpoint = queryString ? `/api/tasks?${queryString}` : "/api/tasks";
 
   const response = await apiGet<TaskListResult>(endpoint);
-  return response.data;
+  return mapTaskListResultTimes(response.data);
 }
 
 /**
@@ -52,7 +71,7 @@ export async function getTasks(filters?: TaskFilters) {
  */
 export async function getTaskById(id: number) {
   const response = await apiGet<TaskInfo>(`/api/tasks/${id}`);
-  return response.data;
+  return mapTaskInfoTimes(response.data);
 }
 
 /**
@@ -60,7 +79,7 @@ export async function getTaskById(id: number) {
  */
 export async function updateTask(id: number, data: UpdateTaskInput) {
   const response = await apiPatch<TaskInfo>(`/api/tasks/${id}`, data);
-  return response.data;
+  return mapTaskInfoTimes(response.data);
 }
 
 /**
@@ -68,7 +87,7 @@ export async function updateTask(id: number, data: UpdateTaskInput) {
  */
 export async function updateTaskStatus(id: number, status: TaskStatus) {
   const response = await apiPatch<TaskInfo>(`/api/tasks/${id}/status`, { status });
-  return response.data;
+  return mapTaskInfoTimes(response.data);
 }
 
 /**

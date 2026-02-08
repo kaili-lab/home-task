@@ -15,8 +15,10 @@ export interface UserInfo {
   avatar: string | null;
   role: string;
   defaultGroupId: number | null;
-  createdAt: Date;
-  updatedAt: Date;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  createdAt: string;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  updatedAt: string;
 }
 
 // 用户群组类型
@@ -26,7 +28,9 @@ export interface UserGroup {
   inviteCode: string;
   avatar: string | null;
   role: string; // owner | member
-  joinedAt: Date;
-  createdAt: Date;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  joinedAt: string;
+  // 统一返回 UTC 字符串，避免 Date 在不同时区序列化产生歧义
+  createdAt: string;
   memberCount?: number; // 成员数量（可选，向后兼容）
 }

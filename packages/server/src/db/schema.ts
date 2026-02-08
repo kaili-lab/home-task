@@ -53,8 +53,8 @@ export const users = pgTable("user", {
   emailVerified: boolean("emailVerified").notNull().default(false),
   name: varchar("name", { length: 255 }), // 用户昵称（显示名称）
   image: varchar("image", { length: 500 }), // Better Auth映射为avatarUrl
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 
   // 业务字段
   phone: varchar("phone", { length: 20 }),
@@ -67,15 +67,15 @@ export const users = pgTable("user", {
 
 export const sessions = pgTable("session", {
   id: serial("id").primaryKey(),
-  expiresAt: timestamp("expiresAt").notNull(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
   userId: integer("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   ipAddress: varchar("ipAddress", { length: 45 }), // Better Auth 1.4+ 必需字段：用于速率限制和会话安全（IPv4最多15字符，IPv6最多45字符）
   userAgent: text("userAgent"), // Better Auth 1.4+ 必需字段：存储请求的 User-Agent 头信息
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const accounts = pgTable("account", {
@@ -88,19 +88,19 @@ export const accounts = pgTable("account", {
   accessToken: text("accessToken"),
   refreshToken: text("refreshToken"),
   idToken: text("idToken"),
-  expiresAt: timestamp("expiresAt"),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }),
   password: varchar("password", { length: 255 }),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const verifications = pgTable("verification", {
   id: serial("id").primaryKey(),
   identifier: varchar("identifier", { length: 255 }).notNull(),
   value: varchar("value", { length: 255 }).notNull(),
-  expiresAt: timestamp("expiresAt").notNull(),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ==================== 业务表 ====================
@@ -111,8 +111,8 @@ export const groups = pgTable("groups", {
   name: varchar("name", { length: 100 }).notNull(),
   inviteCode: varchar("inviteCode", { length: 20 }).notNull().unique(), // 全局唯一邀请码 (如 "8859")
   avatar: text("avatar"),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // 群组成员关联表
@@ -128,7 +128,7 @@ export const groupUsers = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 20 }).notNull().default("member"), // owner (群主) / member (成员)
     status: varchar("status", { length: 20 }).notNull().default("active"), // active (已加入) / pending (邀请中)
-    joinedAt: timestamp("joinedAt").notNull().defaultNow(),
+    joinedAt: timestamp("joinedAt", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     // 唯一约束：(groupId, userId) 必须唯一，防止重复加群
@@ -161,7 +161,7 @@ export const tasks = pgTable("tasks", {
 
   // 完成逻辑
   completedBy: integer("completedBy").references(() => users.id, { onDelete: "set null" }),
-  completedAt: timestamp("completedAt"),
+  completedAt: timestamp("completedAt", { withTimezone: true }),
 
   // 重复任务逻辑
   isRecurring: boolean("isRecurring").notNull().default(false),
@@ -171,8 +171,8 @@ export const tasks = pgTable("tasks", {
   }),
 
   // 时间戳
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // 任务分配表（支持多用户分配）
@@ -186,7 +186,7 @@ export const taskAssignments = pgTable(
     userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     // 唯一约束：同一任务不能重复分配给同一用户
@@ -205,7 +205,7 @@ export const devices = pgTable("devices", {
   groupId: integer("groupId").references(() => groups.id, { onDelete: "cascade" }), // [FK] 绑定群组 -> 显示: 仅该群组公开任务
 
   status: varchar("status", { length: 20 }).notNull().default("active"), // active / inactive
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // 消息表
@@ -222,7 +222,7 @@ export const messages = pgTable("messages", {
   type: messageTypeEnum("type").notNull().default("text"), // text (普通对话) / task_summary (任务卡片) / question (追问)
   payload: jsonb("payload"), // 结构化数据，用于 RN 渲染组件 (如任务详情、确认按钮等)
 
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ==================== 关系定义 ====================

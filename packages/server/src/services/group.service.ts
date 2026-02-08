@@ -1,6 +1,7 @@
 import { eq, and, desc } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { groups, groupUsers, users } from "../db/schema";
+import { toUtcIso } from "../utils/time";
 import type { CreateGroupInput, UpdateGroupInput, GroupInfo, GroupDetail } from "shared";
 
 /**
@@ -65,8 +66,9 @@ export class GroupService {
       name: group.name,
       inviteCode: group.inviteCode,
       avatar: group.avatar || null,
-      createdAt: group.createdAt,
-      updatedAt: group.updatedAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(group.createdAt),
+      updatedAt: toUtcIso(group.updatedAt),
     };
   }
 
@@ -113,13 +115,15 @@ export class GroupService {
       name: group.name,
       inviteCode: group.inviteCode,
       avatar: group.avatar || null,
-      createdAt: group.createdAt,
-      updatedAt: group.updatedAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(group.createdAt),
+      updatedAt: toUtcIso(group.updatedAt),
       members: members.map((m) => ({
         userId: m.userId,
         name: m.name || null,
         role: m.role,
-        joinedAt: m.joinedAt,
+        // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+        joinedAt: toUtcIso(m.joinedAt),
       })),
     };
   }
@@ -147,8 +151,9 @@ export class GroupService {
       name: ug.name,
       inviteCode: ug.inviteCode,
       avatar: ug.avatar || null,
-      createdAt: ug.createdAt,
-      updatedAt: ug.updatedAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(ug.createdAt),
+      updatedAt: toUtcIso(ug.updatedAt),
     }));
   }
 
@@ -194,8 +199,9 @@ export class GroupService {
       name: updatedGroup.name,
       inviteCode: updatedGroup.inviteCode,
       avatar: updatedGroup.avatar || null,
-      createdAt: updatedGroup.createdAt,
-      updatedAt: updatedGroup.updatedAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(updatedGroup.createdAt),
+      updatedAt: toUtcIso(updatedGroup.updatedAt),
     };
   }
 
@@ -242,8 +248,9 @@ export class GroupService {
       name: group.name,
       inviteCode: group.inviteCode,
       avatar: group.avatar || null,
-      createdAt: group.createdAt,
-      updatedAt: group.updatedAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(group.createdAt),
+      updatedAt: toUtcIso(group.updatedAt),
     };
   }
 

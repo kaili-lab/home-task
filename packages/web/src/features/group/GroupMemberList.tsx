@@ -148,9 +148,8 @@ export function GroupMemberList({ groupId, isOwner = false, memberCount }: Group
                       )}
                     </div>
                     <span className="text-xs text-gray-400">
-                      {member.joinedAt instanceof Date
-                        ? `加入于 ${member.joinedAt.toLocaleDateString()}`
-                        : "成员"}
+                      {/* 接口层已统一格式化，避免组件内重复解析导致时间偏差 */}
+                      {member.joinedAt ? `加入于 ${member.joinedAt}` : "成员"}
                     </span>
                   </div>
                 </div>

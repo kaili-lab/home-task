@@ -19,6 +19,9 @@ interface AppProviderProps {
 
 // 将UserGroup转换为Group类型（导出以便复用）
 export function userGroupToGroup(userGroup: UserGroup): Group {
+  // 统一按 UTC 字符串接收，兼容历史 Date 类型避免前端展示错乱
+  // 接口层已统一格式化，这里直接使用避免重复解析造成偏差
+  const createdAt = userGroup.createdAt || undefined;
   return {
     id: userGroup.id,
     name: userGroup.name,
@@ -27,7 +30,7 @@ export function userGroupToGroup(userGroup: UserGroup): Group {
     role: userGroup.role,
     icon: userGroup.avatar || "🏠", // 使用avatar作为icon，如果没有则使用默认图标
     memberCount: userGroup.memberCount || 1, // 使用API返回的memberCount，如果没有则设为1
-    createdAt: userGroup.createdAt instanceof Date ? userGroup.createdAt.toISOString() : undefined,
+    createdAt,
     updatedAt: undefined,
   };
 }

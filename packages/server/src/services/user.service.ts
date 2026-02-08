@@ -1,6 +1,7 @@
 import { eq, and, count, desc } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { users, groupUsers, groups } from "../db/schema";
+import { toUtcIso } from "../utils/time";
 import type { UpdateUserInput, UserInfo, UserGroup } from "shared";
 
 /**
@@ -39,8 +40,9 @@ export class UserService {
       avatar: user.avatar || null,
       role: user.role || "user",
       defaultGroupId: user.defaultGroupId || null,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(user.createdAt),
+      updatedAt: toUtcIso(user.updatedAt),
     };
   }
 
@@ -102,8 +104,9 @@ export class UserService {
       avatar: updatedUser.avatar || null,
       role: updatedUser.role || "user",
       defaultGroupId: updatedUser.defaultGroupId || null,
-      createdAt: updatedUser.createdAt,
-      updatedAt: updatedUser.updatedAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(updatedUser.createdAt),
+      updatedAt: toUtcIso(updatedUser.updatedAt),
     };
   }
 
@@ -142,8 +145,9 @@ export class UserService {
           inviteCode: ug.inviteCode,
           avatar: ug.avatar || null,
           role: ug.role,
-          joinedAt: ug.joinedAt,
-          createdAt: ug.createdAt,
+          // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+          joinedAt: toUtcIso(ug.joinedAt),
+          createdAt: toUtcIso(ug.createdAt),
           memberCount,
         };
       })

@@ -47,10 +47,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
         >
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
           <time className={cn("text-xs mt-2 block", isUser ? "text-orange-100" : "text-gray-400")}>
-            {new Date(message.timestamp).toLocaleTimeString("zh-CN", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {/* 接口层已统一格式化时间，这里直接展示避免重复解析 */}
+            {message.timestamp || ""}
           </time>
         </div>
 

@@ -6,6 +6,7 @@ import { messages as messagesTable } from "../db/schema";
 import { eq, desc } from "drizzle-orm";
 import { getUserId, successResponse } from "../utils/route-helpers";
 import { handleServiceError } from "../utils/error-handler";
+import { toUtcIso } from "../utils/time";
 
 const aiRoutes = new Hono<{
   Bindings: Bindings;
@@ -83,7 +84,8 @@ aiRoutes.get("/messages", async (c) => {
         content: row.content,
         type: row.type,
         payload: row.payload,
-        createdAt: row.createdAt,
+        // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+        createdAt: toUtcIso(row.createdAt),
       }));
 
     return c.json(successResponse({ messages }));

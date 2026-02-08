@@ -1,6 +1,7 @@
 ﻿import { eq, and, or, isNull, isNotNull, inArray, desc, asc, count, gte, lte } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { tasks, groupUsers, users, groups, taskAssignments } from "../db/schema";
+import { toUtcIso } from "../utils/time";
 import type {
   TaskStatus,
   TaskSource,
@@ -634,7 +635,8 @@ export class TaskService {
         assignedToNames: assignedNames,
         completedBy: task.completedBy,
         completedByName: task.completedBy ? userMap.get(task.completedBy) || null : null,
-        completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
+        // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+        completedAt: toUtcIso(task.completedAt),
         dueDate: task.dueDate,
         startTime: task.startTime,
         endTime: task.endTime,
@@ -643,8 +645,8 @@ export class TaskService {
         isRecurring: task.isRecurring,
         recurringRule: task.recurringRule as RecurringRule | null,
         recurringParentId: task.recurringParentId,
-        createdAt: new Date(task.createdAt).toISOString(),
-        updatedAt: new Date(task.updatedAt).toISOString(),
+        createdAt: toUtcIso(task.createdAt),
+        updatedAt: toUtcIso(task.updatedAt),
       };
     });
 
@@ -744,7 +746,8 @@ export class TaskService {
       assignedToNames: assignedNames,
       completedBy: task.completedBy,
       completedByName: completer?.name || null,
-      completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      completedAt: toUtcIso(task.completedAt),
       dueDate: task.dueDate,
       startTime: task.startTime,
       endTime: task.endTime,
@@ -753,8 +756,8 @@ export class TaskService {
       isRecurring: task.isRecurring,
       recurringRule: task.recurringRule as RecurringRule | null,
       recurringParentId: task.recurringParentId,
-      createdAt: new Date(task.createdAt).toISOString(),
-      updatedAt: new Date(task.updatedAt).toISOString(),
+      createdAt: toUtcIso(task.createdAt),
+      updatedAt: toUtcIso(task.updatedAt),
     };
   }
 

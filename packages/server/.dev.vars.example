@@ -9,5 +9,5 @@ RESEND_API_KEY=your-api-key-here
 
 AIHUBMIX_API_KEY=your-api-key-here
 
-# 前端地址（用于 Stripe 支付回调）
+# 前端地址
 FRONTEND_URL=http://localhost:5173

@@ -5,6 +5,7 @@ import type { ChatMessage as ChatMessageType } from "@/types";
 import { chat, getMessages } from "@/services/ai.api";
 import { Card } from "@/components/ui/card";
 import { showToastError } from "@/utils/toast";
+import { formatLocalDateTime } from "@/utils/date";
 
 export function AIView() {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
@@ -28,7 +29,7 @@ export function AIView() {
           id: msg.id ?? idx,
           role: msg.role === "assistant" ? ("ai" as const) : ("user" as const),
           content: msg.content,
-          timestamp: msg.createdAt ?? new Date().toISOString(),
+          timestamp: msg.createdAt ?? formatLocalDateTime(new Date()) ?? "",
           type: msg.type,
           payload: msg.payload,
         }));
@@ -49,7 +50,7 @@ export function AIView() {
       id: Date.now(),
       role: "user",
       content,
-      timestamp: new Date().toISOString(),
+      timestamp: formatLocalDateTime(new Date()) ?? "",
       type: "text",
     };
     setMessages((prev) => [...prev, userMessage]);
@@ -62,7 +63,7 @@ export function AIView() {
         id: Date.now() + 1,
         role: "ai",
         content: response.content,
-        timestamp: new Date().toISOString(),
+        timestamp: formatLocalDateTime(new Date()) ?? "",
         type: response.type,
         payload: response.payload,
       };

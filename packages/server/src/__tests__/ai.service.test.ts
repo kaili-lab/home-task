@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+﻿import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AIService } from "../services/ai.service";
 import type { DbInstance } from "../db/db";
 import type { Bindings } from "../types/bindings";
@@ -345,6 +345,103 @@ describe("AIService", () => {
       vi.useRealTimers();
     });
 
+    it("无日期且当前已是晚上，提到下午应强制追问确认", async () => {
+      // 用固定时间确保“晚上”判定稳定，避免依赖真实时间导致测试漂移
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(Date.UTC(2026, 1, 5, 20, 0, 0)));
+      const { ChatOpenAI } = await import("@langchain/openai");
+      const mockOpenAI = vi.mocked(ChatOpenAI);
+      mockOpenAI.mockReturnValue({
+        invoke: vi.fn().mockResolvedValueOnce({
+          content: "",
+          tool_calls: [
+            {
+              id: "call_1",
+              name: "create_task",
+              args: {
+                title: "去车里拿衣服",
+                dueDate: "2026-02-06",
+                timeSegment: "afternoon",
+              },
+            },
+          ],
+        }),
+      } as any);
+
+      let isGroupQuery = false;
+      // 使用分支逻辑是为了同时满足群组查询（需要 Promise 结果）和链式查询（需要 mockDb）
+      mockDb.leftJoin = vi.fn().mockImplementation(() => {
+        isGroupQuery = true;
+        return mockDb;
+      });
+      mockDb.where = vi.fn().mockImplementation(() => {
+        if (isGroupQuery) {
+          isGroupQuery = false;
+          return Promise.resolve([]);
+        }
+        return mockDb;
+      });
+      mockDb.limit = vi.fn().mockResolvedValue([]);
+
+      const aiService2 = new AIService(mockDb as DbInstance, mockEnv as Bindings);
+      const result = await aiService2.chat(1, "提醒我下午去车里拿衣服");
+
+      // 不合理时间必须追问确认，且不得直接创建任务
+      expect(result.type).toBe("question");
+      expect(result.content).toMatch(/晚上|下午|时间|时段|确认/);
+
+      vi.useRealTimers();
+    });
+
+    it("今天具体时间已过时应强制追问确认", async () => {
+      // 用固定时间确保“具体时间已过”的判断一致
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(Date.UTC(2026, 1, 5, 16, 0, 0)));
+      const { ChatOpenAI } = await import("@langchain/openai");
+      const mockOpenAI = vi.mocked(ChatOpenAI);
+      mockOpenAI.mockReturnValue({
+        invoke: vi.fn().mockResolvedValueOnce({
+          content: "",
+          tool_calls: [
+            {
+              id: "call_2",
+              name: "create_task",
+              args: {
+                title: "开会",
+                dueDate: "2026-02-05",
+                startTime: "10:00",
+                endTime: "11:00",
+              },
+            },
+          ],
+        }),
+      } as any);
+
+      let isGroupQuery = false;
+      // 使用分支逻辑是为了同时满足群组查询（需要 Promise 结果）和链式查询（需要 mockDb）
+      mockDb.leftJoin = vi.fn().mockImplementation(() => {
+        isGroupQuery = true;
+        return mockDb;
+      });
+      mockDb.where = vi.fn().mockImplementation(() => {
+        if (isGroupQuery) {
+          isGroupQuery = false;
+          return Promise.resolve([]);
+        }
+        return mockDb;
+      });
+      mockDb.limit = vi.fn().mockResolvedValue([]);
+
+      const aiService2 = new AIService(mockDb as DbInstance, mockEnv as Bindings);
+      const result = await aiService2.chat(1, "今天上午10点到11点开会");
+
+      // 已过的具体时间段必须追问确认，不能自动纠正
+      expect(result.type).toBe("question");
+      expect(result.content).toMatch(/已过|时间|确认|无法/);
+
+      vi.useRealTimers();
+    });
+
     it("无工具调用时应返回纯文本响应", async () => {
       const { ChatOpenAI } = await import("@langchain/openai");
       const mockOpenAI = vi.mocked(ChatOpenAI);
@@ -429,3 +526,5 @@ describe("AIService", () => {
     });
   });
 });
+
+

@@ -1,6 +1,7 @@
 import { eq, and, or, isNull, inArray } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { devices, tasks, groupUsers, groups } from "../db/schema";
+import { toUtcIso } from "../utils/time";
 import type { CreateDeviceInput, DeviceInfo, DeviceTask } from "shared";
 
 /**
@@ -90,7 +91,8 @@ export class DeviceService {
       groupId: device.groupId,
       groupName,
       status: device.status,
-      createdAt: device.createdAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(device.createdAt),
     };
   }
 
@@ -142,7 +144,8 @@ export class DeviceService {
           groupId: device.groupId,
           groupName,
           status: device.status,
-          createdAt: device.createdAt,
+          // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+          createdAt: toUtcIso(device.createdAt),
         };
       }),
     );
@@ -211,7 +214,8 @@ export class DeviceService {
       startTime: task.startTime,
       endTime: task.endTime,
       timeSegment: task.startTime && task.endTime ? null : (task.timeSegment || "all_day"),
-      createdAt: task.createdAt,
+      // 统一按 UTC 输出，避免无时区时间被按本地时区解析导致偏移
+      createdAt: toUtcIso(task.createdAt),
     }));
   }
 
