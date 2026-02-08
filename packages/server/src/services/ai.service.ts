@@ -13,8 +13,8 @@ import { messages as messagesTable, groupUsers, groups } from "../db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import type { TaskInfo, TimeSegment } from "shared";
 
-// ==================== Tool 瀹氫箟锛圤penAI JSON Schema 鏍煎紡锛?===================
-// 浣跨敤 OpenAI 鍘熺敓 tool 鏍煎紡鑰岄潪 LangChain StructuredTool锛岄伩鍏?zod v3/v4 鐗堟湰鍐茬獊锛?// 鍚屾椂鍑忓皯 bundle 浣撶Н锛堥€傞厤 Cloudflare Workers。
+// ==================== Tool 定义（OpenAI JSON Schema 格式）====================
+// 使用 OpenAI 原生 tool 格式而非 LangChain StructuredTool，避免 zod v3/v4 版本冲突；同时减少 bundle 体积（适配 Cloudflare Workers）。
 const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
@@ -190,9 +190,12 @@ type ResultCapture = {
 // ==================== AIService ====================
 
 /**
- * AI Agent 鏈嶅姟灞? *
- * 浣跨敤 LangChain 鐨?ChatOpenAI 浣滀负妯″瀷鎺ュ彛锛屾墜鍔ㄧ鐞?Agent 璋冪敤寰幆銆? * 涓嶄娇鐢?AgentExecutor锛屽師鍥狅細閬垮厤寮曞叆 langchain 涓诲寘锛坆undle 浣撶Н锛夛紝
- * 涓旀墜鍔?loop 瀵?Cloudflare Workers 鐨勮姹傜敓鍛藉懆鏈熸洿閫忔槑銆? * 鏋舵瀯鏈韩浠嶇鍚?LangChain 鐨勫垎灞傝璁★細Model 灞傚彲鏇挎崲锛孴ool 閫昏緫鐙珛銆? */
+ * AI Agent 服务层
+ * 使用 LangChain 的 ChatOpenAI 作为模型接口，手动管理 Agent 调用循环。
+ * 不使用 AgentExecutor，原因：避免引入 langchain 主包（bundle 体积），
+ * 且手动 loop 对 Cloudflare Workers 的请求生命周期更透明。
+ * 架构本身仍符合 LangChain 的分层设计：Model 层可替换，Tool 逻辑独立。
+ */
 export class AIService {
   constructor(
     private db: DbInstance,
@@ -201,28 +204,28 @@ export class AIService {
     private requestId: string = `ai_${Date.now()}_${Math.random()}`,
   ) {}
 
-  // 鈹€鈹€ Model 灞傦紙鍙浛鎹細鎹㈡ā鍨嬪彧鏀硅繖涓柟娉曪級鈹€鈹€
+  // == Model 层（可替换：换模型只改这个方法）==
   private createLLM(): ChatOpenAI {
-    // 濡傛灉閰嶇疆浜?AIHUBMIX锛堜腑杞湇鍔★級锛屼娇鐢ㄤ腑杞湇鍔″拰鑷畾涔?baseURL
+    // 如果配置了 AIHUBMIX（中转服务），使用中转服务和自定义 baseURL
     if (this.env.AIHUBMIX_API_KEY) {
       const config = {
         apiKey: this.env.AIHUBMIX_API_KEY,
         model: this.env.AIHUBMIX_MODEL_NAME || "deepseek-v3.2",
-        // ChatOpenAI 闇€瑕侀€氳繃 configuration.baseURL 浼犻€掕嚜瀹氫箟绔偣
+        // ChatOpenAI 需要通过 configuration.baseURL 传递自定义端点，避免默认端点不匹配中转服务
         configuration: {
           baseURL: this.env.AIHUBMIX_BASE_URL,
         },
       };
       return new ChatOpenAI(config as any);
     }
-    // 浣跨敤瀹樻柟 OpenAI API
+    // 使用官方 OpenAI API
     return new ChatOpenAI({
       apiKey: this.env.OPENAI_API_KEY,
       model: "gpt-4o",
     });
   }
 
-  // 鈹€鈹€ History 灞傦細鍔犺浇瀵硅瘽鍘嗗彶 鈹€鈹€
+  // == History 层：加载对话历史 ==
   private async loadHistory(userId: number, limit = 20): Promise<BaseMessage[]> {
     const rows = await this.db
       .select()
@@ -231,12 +234,12 @@ export class AIService {
       .orderBy(desc(messagesTable.createdAt))
       .limit(limit);
 
-    // 鍊掑簭鍔犺浇鍚庡弽杞负鏃堕棿椤哄簭
+    // 倒序加载后反转为时间顺序
     rows.reverse();
 
     return rows
       .filter((row) => row.role !== "system")
-      // system 娑堟伅鍔ㄦ€佺敓鎴愶紝涓嶅瓨鍏ュ巻鍙?
+      // system 消息动态生成，不存入历史
       .map((row) =>
         row.role === "user" ? new HumanMessage(row.content) : new AIMessage(row.content),
       );
@@ -254,7 +257,7 @@ export class AIService {
     return rows[0] || null;
   }
 
-  // 鈹€鈹€ History 灞傦細淇濆瓨娑堟伅 鈹€鈹€
+  // == History 层：保存消息 ==
   private async saveMessage(
     userId: number,
     role: "user" | "assistant",
@@ -271,7 +274,7 @@ export class AIService {
     });
   }
 
-  // 鈹€鈹€ 绯荤粺鎻愮ず锛氬寘鍚粖澶╂棩鏈?+ 鐢ㄦ埛缇ょ粍淇℃伅 鈹€鈹€
+  // == 系统提示：包含今日日期 + 用户群组信息 ==
   private async buildSystemPrompt(userId: number): Promise<string> {
     const today = this.getTodayDate();
     const weekday = this.getWeekdayLabel(this.getUserNow());
@@ -778,7 +781,7 @@ ${groupsList}
     return result.tasks;
   }
 
-  // 鈹€鈹€ 鍐茬獊妫€娴嬶細妫€鏌ユ椂闂存鏄惁涓庡凡鏈変换鍔￠噸鍙?鈹€鈹€
+  // == 冲突检测：检查时间段是否与已有任务重叠 ==
   private async checkTimeConflict(
     userId: number,
     dueDate: string,
@@ -789,7 +792,7 @@ ${groupsList}
     return this.filterTimeConflicts(tasks, startTime, endTime);
   }
 
-  // 鈹€鈹€ Tool 灞傦細鎵ц宸ュ叿璋冪敤锛堟瘡涓?case 鐙珛锛屽姞鏂板姛鑳藉彧闇€鍔?case锛夆攢鈹€
+  // == Tool 层：执行工具调用（每个 case 独立，加新功能只需加 case）==
   private async executeToolCall(
     userId: number,
     toolName: string,

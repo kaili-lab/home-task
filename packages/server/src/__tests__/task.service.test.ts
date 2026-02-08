@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TaskService } from "../services/task.service";
 
-// Build a controllable mock DB with only the methods used by TaskService.
+// 只保留 TaskService 会用到的方法，避免无关依赖干扰测试意图。
 function makeDb(overrides: Partial<any> = {}) {
   return {
     query: {
@@ -18,7 +18,7 @@ function makeDb(overrides: Partial<any> = {}) {
   };
 }
 
-// Build a select chain mock; the terminal method resolves a Promise.
+// 链式调用保持一致，末端方法返回 Promise 才能贴近真实查询行为。
 function makeSelectChain<T>({
   terminal,
   value,
@@ -38,7 +38,7 @@ function makeSelectChain<T>({
   return chain;
 }
 
-// Build an update chain mock.
+// 更新链保持最小实现，避免测试被无关链式细节牵扯。
 function makeUpdateChain() {
   return {
     set: vi.fn().mockReturnThis(),
@@ -46,7 +46,7 @@ function makeUpdateChain() {
   };
 }
 
-// Build a delete chain mock.
+// 删除链仅覆盖必要分支，减少无意义的模拟复杂度。
 function makeDeleteChain() {
   return {
     where: vi.fn().mockResolvedValue(undefined),
@@ -93,10 +93,10 @@ describe("TaskService - create task & validation", () => {
   it("group task: assignee not in group", async () => {
     const db = makeDb();
     db.query.groupUsers.findFirst.mockResolvedValue({ id: 1 });
-    // First select: validate assignedToIds exist
+    // 第一次 select 只验证 assignedToIds 是否存在，防止后续逻辑掩盖问题。
     db.select
       .mockReturnValueOnce(makeSelectChain({ terminal: "where", value: [{ id: 1 }, { id: 2 }] }))
-      // Second select: validate assignees are group members
+      // 第二次 select 校验组成员关系，确保权限规则被单独验证。
       .mockReturnValueOnce(makeSelectChain({ terminal: "where", value: [{ userId: 1 }] }));
 
     const service = new TaskService(db as any);
@@ -348,23 +348,23 @@ describe("TaskService - recurring task creation flow", () => {
     const db = makeDb();
     const service = new TaskService(db as any);
 
-    // Mock instance dates to avoid real time calculation.
+    // 固定实例日期，避免真实时间计算导致测试不稳定。
     vi.spyOn(service as any, "calculateInstanceDates").mockReturnValue([
       "2024-02-01",
       "2024-02-02",
     ]);
 
-    // First insert: template task
+    // 第一次 insert 写入模板任务，便于区分模板与实例。
     const insertTemplate = {
       values: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([{ id: 100 }]),
       }),
     };
-    // Second insert: instance tasks
+    // 第二次 insert 写入实例任务，保证流程覆盖完整路径。
     const insertInstances = {
       values: vi.fn().mockResolvedValue(undefined),
     };
-    // Third insert: task assignments
+    // 第三次 insert 写入任务分配，用于验证关联数量是否正确。
     const insertAssignments = {
       values: vi.fn().mockResolvedValue(undefined),
     };
@@ -373,7 +373,7 @@ describe("TaskService - recurring task creation flow", () => {
       .mockReturnValueOnce(insertInstances)
       .mockReturnValueOnce(insertAssignments);
 
-    // Query instance task IDs
+    // 查询实例任务 ID，确保后续分配依赖于真实查询结果。
     db.select.mockReturnValueOnce(
       makeSelectChain({ terminal: "where", value: [{ id: 101 }, { id: 102 }] }),
     );
@@ -394,7 +394,7 @@ describe("TaskService - recurring task creation flow", () => {
       assignedToIds: [1, 2],
     });
 
-    // Assignments should include template + instances (3 tasks) * 2 users = 6 rows
+    // 分配需要覆盖模板与实例，确保数量校验能反映整体关系。
     const assignmentsArg = insertAssignments.values.mock.calls[0][0];
     expect(assignmentsArg).toHaveLength(6);
   });
@@ -409,12 +409,12 @@ describe("TaskService - query / update / delete", () => {
     const db = makeDb();
     const service = new TaskService(db as any);
 
-    // 1) User groups
+    // 1) 先查询用户所属组，保证后续权限与范围正确。
     db.select
       .mockReturnValueOnce(makeSelectChain({ terminal: "where", value: [{ groupId: 1 }] }))
-      // 2) Total count
+      // 2) 再拿总数，避免分页结果与统计不一致。
       .mockReturnValueOnce(makeSelectChain({ terminal: "where", value: [{ count: 1 }] }))
-      // 3) Task list
+      // 3) 然后查询任务列表，确保数据结构完整可用。
       .mockReturnValueOnce(
         makeSelectChain({
           terminal: "offset",
@@ -445,14 +445,14 @@ describe("TaskService - query / update / delete", () => {
           ],
         }),
       )
-      // 4) Task assignments
+      // 4) 接着查询任务分配，便于还原负责人信息。
       .mockReturnValueOnce(
         makeSelectChain({
           terminal: "where",
           value: [{ taskId: 10, userId: 2 }],
         }),
       )
-      // 5) User names
+      // 5) 最后查用户姓名，保证展示字段可组装。
       .mockReturnValueOnce(
         makeSelectChain({
           terminal: "where",
