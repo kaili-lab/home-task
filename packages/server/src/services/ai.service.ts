@@ -13,6 +13,11 @@ import { messages as messagesTable, groupUsers, groups } from "../db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import type { TaskInfo, TimeSegment } from "shared";
 
+/*
+工具定义集中在文件顶部，避免在执行循环中分散查找。
+保持与 OpenAI 原生 schema 对齐，是为了减少运行时适配层和依赖体积，
+在 Serverless 环境下更容易控制包大小与冷启动时间。
+*/
 // ==================== Tool 定义（OpenAI JSON Schema 格式）====================
 // 使用 OpenAI 原生 tool 格式而非 LangChain StructuredTool，避免 zod v3/v4 版本冲突；同时减少 bundle 体积（适配 Cloudflare Workers）。
 const TOOL_DEFINITIONS = [
@@ -44,7 +49,15 @@ const TOOL_DEFINITIONS = [
           },
           timeSegment: {
             type: "string",
-            enum: ["all_day", "early_morning", "morning", "forenoon", "noon", "afternoon", "evening"],
+            enum: [
+              "all_day",
+              "early_morning",
+              "morning",
+              "forenoon",
+              "noon",
+              "afternoon",
+              "evening",
+            ],
             description:
               "模糊时间段：全天/凌晨/早上/上午/中午/下午/晚上。与 startTime/endTime 互斥。",
           },
@@ -124,8 +137,17 @@ const TOOL_DEFINITIONS = [
           },
           timeSegment: {
             type: "string",
-            enum: ["all_day", "early_morning", "morning", "forenoon", "noon", "afternoon", "evening"],
-            description: "模糊时间段：全天/凌晨/早上/上午/中午/下午/晚上。与 startTime/endTime 互斥。",
+            enum: [
+              "all_day",
+              "early_morning",
+              "morning",
+              "forenoon",
+              "noon",
+              "afternoon",
+              "evening",
+            ],
+            description:
+              "模糊时间段：全天/凌晨/早上/上午/中午/下午/晚上。与 startTime/endTime 互斥。",
           },
           priority: {
             type: "string",
@@ -197,6 +219,7 @@ type ResultCapture = {
  * 架构本身仍符合 LangChain 的分层设计：Model 层可替换，Tool 逻辑独立。
  */
 export class AIService {
+  // 作用：初始化服务依赖与请求级上下文信息
   constructor(
     private db: DbInstance,
     private env: Bindings,
@@ -205,12 +228,15 @@ export class AIService {
   ) {}
 
   // == Model 层（可替换：换模型只改这个方法）==
+  // 作用：创建并配置 LLM 实例
   private createLLM(): ChatOpenAI {
+    // 支持中转服务是为了在不同模型提供方间切换时不侵入业务逻辑
     // 如果配置了 AIHUBMIX（中转服务），使用中转服务和自定义 baseURL
     if (this.env.AIHUBMIX_API_KEY) {
       const config = {
         apiKey: this.env.AIHUBMIX_API_KEY,
         model: this.env.AIHUBMIX_MODEL_NAME || "deepseek-v3.2",
+        temperature: 0,
         // ChatOpenAI 需要通过 configuration.baseURL 传递自定义端点，避免默认端点不匹配中转服务
         configuration: {
           baseURL: this.env.AIHUBMIX_BASE_URL,
@@ -222,29 +248,36 @@ export class AIService {
     return new ChatOpenAI({
       apiKey: this.env.OPENAI_API_KEY,
       model: "gpt-4o",
+      temperature: 0,
     });
   }
 
   // == History 层：加载对话历史 ==
+  // 作用：读取并转换历史消息为模型可用的消息序列
   private async loadHistory(userId: number, limit = 20): Promise<BaseMessage[]> {
     const rows = await this.db
       .select()
       .from(messagesTable)
       .where(eq(messagesTable.userId, userId))
+      // 先按时间倒序取最新消息，减少读取量再翻转为时间顺序
       .orderBy(desc(messagesTable.createdAt))
       .limit(limit);
 
     // 倒序加载后反转为时间顺序
     rows.reverse();
 
+    /*
+    system 消息由 buildSystemPrompt 动态生成，包含“当前”上下文信息。
+    如果把历史的 system 消息混入，会造成过期上下文重复，既浪费窗口又可能冲突。
+    */
     return rows
       .filter((row) => row.role !== "system")
-      // system 消息动态生成，不存入历史
       .map((row) =>
         row.role === "user" ? new HumanMessage(row.content) : new AIMessage(row.content),
       );
   }
 
+  // 作用：读取最近一条助手消息用于后续确认逻辑
   private async loadLastAssistantMessage(
     userId: number,
   ): Promise<{ content: string; type: string } | null> {
@@ -258,6 +291,7 @@ export class AIService {
   }
 
   // == History 层：保存消息 ==
+  // 作用：持久化当前对话消息，便于后续上下文恢复
   private async saveMessage(
     userId: number,
     role: "user" | "assistant",
@@ -275,7 +309,12 @@ export class AIService {
   }
 
   // == 系统提示：包含今日日期 + 用户群组信息 ==
+  // 作用：生成系统提示以提供统一规则与上下文
   private async buildSystemPrompt(userId: number): Promise<string> {
+    /*
+    把日期、时段、群组信息一次性注入提示，
+    是为了减少模型在关键字段上的二次追问，提升一次命中率。
+    */
     const today = this.getTodayDate();
     const weekday = this.getWeekdayLabel(this.getUserNow());
     const currentSegment = this.formatTimeSegmentLabel(this.getCurrentTimeSegment());
@@ -313,7 +352,7 @@ ${groupsList}
 
 任务时间分为两种模式，**互斥**：
 
-**模式A — 具体时间（startTime + endTime）：**
+**模式A — 具体时间范围（startTime + endTime）：**
 - 必须同时有开始和结束时间
 - 用户用12小时制且未说明上午/下午（如"4点到5点"），必须追问确认
 - 用户用24小时制（如"14点到15点"）或已说明（如"下午4点到5点"），无需追问
@@ -331,7 +370,6 @@ ${groupsList}
 - 用户既没说具体时间也没说模糊时间段时：
   - 任务日期是今天且当前已是晚上 → 传 timeSegment = evening
   - 其他情况 → 传 timeSegment = all_day
-- 若用户明确说"全天"，但任务日期是今天且当前已是晚上，提醒："现在已是晚上，无法设置为全天"
 
 两种模式互斥：有具体时间时不传 timeSegment，有 timeSegment 时不传 startTime/endTime。
 
@@ -341,7 +379,8 @@ ${groupsList}
 1. 先调用 query_tasks 查询该日期的所有任务
 2. 拿到结果后，做两项判断：
    - **语义冲突**：新任务与已有任务是否表达相同的事（如"取快递"≈"拿快递"≈"去拿包裹"）
-   - **时间冲突**：仅当新任务有具体时间段时，检查是否与已有任务时间重叠
+   - **时间冲突**：仅当新任务有具体时间段时，检查是否与已有任务时间重叠，如果是segment模式则不检查时间冲突，只检查语义冲突
+   - 需要两个都不冲突才直接创建
 3. 根据判断结果：
    - 无冲突 → 直接调用 create_task
    - 仅语义冲突 → 提示用户"你当天已有类似任务：XXX"，请求确认后再创建
@@ -382,6 +421,12 @@ ${groupsList}
 - 非任务相关的请求，礼貌告知只能帮忙管理任务`;
   }
 
+  /*
+  时间/日期的启发式识别用于“先分流后决策”：
+  先判断用户表达更接近具体时间还是模糊时段，
+  可以避免不必要的追问并稳定工具参数形态。
+  */
+  // 作用：判断文本是否包含模糊时间段提示
   private hasTimeSegmentHint(text: string): boolean {
     return (
       text.includes("全天") ||
@@ -400,20 +445,21 @@ ${groupsList}
     );
   }
 
+  // 作用：判断文本是否包含明确的时间范围表达
   private hasExplicitTimeRange(text: string): boolean {
     // 匹配“3点到5点”/“4:00-15:00”等
     const timePattern = /(\d{1,2})([:点时](\d{1,2}))?/g;
     const matches = text.match(timePattern) || [];
     if (matches.length >= 2) return true;
-    return /(\d{1,2}(?:[:点时]\d{1,2})?)\s*[-到至~]\s*(\d{1,2}(?:[:点时]\d{1,2})?)/.test(
-      text,
-    );
+    return /(\d{1,2}(?:[:点时]\d{1,2})?)\s*[-到至~]\s*(\d{1,2}(?:[:点时]\d{1,2})?)/.test(text);
   }
 
+  // 作用：判断文本是否包含明确的时间点表达
   private hasExplicitTimePoint(text: string): boolean {
     return /(\d{1,2})([:点时](\d{1,2}))/.test(text);
   }
 
+  // 作用：判断文本是否包含日期相关线索
   private hasDateHint(text: string): boolean {
     if (/\d{4}-\d{2}-\d{2}/.test(text)) return true;
     const keywords = [
@@ -449,14 +495,38 @@ ${groupsList}
     return keywords.some((k) => text.includes(k));
   }
 
+  /*
+  意图推断作为轻量级兜底，避免完全依赖模型输出。
+  这样可以在模型未触发 tool call 时仍能给出合理的提示或补救。
+  */
+  // 作用：从用户文本中粗粒度推断意图
   private inferTaskIntent(
     message: string,
   ): "create" | "query" | "update" | "complete" | "delete" | null {
     const text = message.toLowerCase();
     const hasAny = (keywords: string[]) => keywords.some((k) => text.includes(k));
     const deleteKeywords = ["删除", "移除", "取消任务", "作废", "清除", "delete", "remove"];
-    const completeKeywords = ["完成", "做完", "搞定", "已完成", "标记完成", "完成任务", "done", "complete"];
-    const updateKeywords = ["修改", "更新", "改成", "改为", "调整", "更改", "延后", "提前", "update"];
+    const completeKeywords = [
+      "完成",
+      "做完",
+      "搞定",
+      "已完成",
+      "标记完成",
+      "完成任务",
+      "done",
+      "complete",
+    ];
+    const updateKeywords = [
+      "修改",
+      "更新",
+      "改成",
+      "改为",
+      "调整",
+      "更改",
+      "延后",
+      "提前",
+      "update",
+    ];
     const queryKeywords = [
       "查看",
       "列出",
@@ -499,6 +569,7 @@ ${groupsList}
     return null;
   }
 
+  // 作用：判断是否需要强制模型触发工具调用
   private shouldRequireToolCall(message: string): boolean {
     const intent = this.inferTaskIntent(message);
     if (!intent) return false;
@@ -506,6 +577,7 @@ ${groupsList}
     return true;
   }
 
+  // 作用：识别用户是否在语义冲突提示后给出肯定回复
   private isAffirmativeMessage(message: string): boolean {
     const trimmed = message.trim();
     if (!trimmed) return false;
@@ -523,21 +595,28 @@ ${groupsList}
       "要的",
     ];
     if (shortConfirmations.includes(trimmed)) return true;
-    return trimmed.includes("仍要创建") || trimmed.includes("还是要创建") || trimmed.includes("继续创建");
+    return (
+      trimmed.includes("仍要创建") || trimmed.includes("还是要创建") || trimmed.includes("继续创建")
+    );
   }
 
+  // 作用：判断上一条助手消息是否在请求语义冲突确认
   private didAskForSemanticConfirmation(text?: string | null): boolean {
     if (!text) return false;
     return text.includes("是否仍要创建") || text.includes("回复“确认”继续创建");
   }
 
+  // 作用：根据上下文决定是否跳过语义冲突检查
   private shouldSkipSemanticConflictCheck(
     message: string,
     lastAssistantMessage?: string | null,
   ): boolean {
-    return this.isAffirmativeMessage(message) && this.didAskForSemanticConfirmation(lastAssistantMessage);
+    return (
+      this.isAffirmativeMessage(message) && this.didAskForSemanticConfirmation(lastAssistantMessage)
+    );
   }
 
+  // 作用：粗判模型回复是否像“已执行成功”的话术
   private looksLikeActionSuccess(content: string): boolean {
     const text = content.toLowerCase();
     const successPhrases = [
@@ -565,6 +644,7 @@ ${groupsList}
     return successPhrases.some((phrase) => text.includes(phrase));
   }
 
+  // 作用：当模型误判已执行时，给出未执行的澄清提示
   private buildActionNotExecutedMessage(
     intent: "create" | "query" | "update" | "complete" | "delete" | null,
   ): string {
@@ -584,6 +664,7 @@ ${groupsList}
     }
   }
 
+  // 作用：从文本中推断模糊时间段枚举值
   private inferTimeSegmentFromText(text: string): TimeSegment {
     if (text.includes("全天")) return "all_day";
     if (text.includes("凌晨") || text.includes("清晨")) return "early_morning";
@@ -591,12 +672,18 @@ ${groupsList}
     if (text.includes("上午")) return "forenoon";
     if (text.includes("中午")) return "noon";
     if (text.includes("下午") || text.includes("午后")) return "afternoon";
-    if (text.includes("晚上") || text.includes("夜晚") || text.includes("夜里") || text.includes("傍晚")) {
+    if (
+      text.includes("晚上") ||
+      text.includes("夜晚") ||
+      text.includes("夜里") ||
+      text.includes("傍晚")
+    ) {
       return "evening";
     }
     return "all_day";
   }
 
+  // 作用：将时间段枚举转换为可读中文标签
   private formatTimeSegmentLabel(segment: TimeSegment | null | undefined): string {
     switch (segment) {
       case "early_morning":
@@ -616,6 +703,7 @@ ${groupsList}
         return "全天";
     }
   }
+  // 作用：为时间段排序提供稳定的序号
   private getTimeSegmentOrder(segment: TimeSegment): number {
     switch (segment) {
       case "early_morning":
@@ -636,6 +724,7 @@ ${groupsList}
     }
   }
 
+  // 作用：基于用户时区获取当前时间段
   private getCurrentTimeSegment(): TimeSegment {
     const hour = this.getUserNow().getUTCHours();
     if (hour >= 0 && hour < 6) return "early_morning";
@@ -647,14 +736,17 @@ ${groupsList}
     return "morning";
   }
 
+  // 作用：按用户时区获取“现在”的时间
   private getUserNow(): Date {
     return new Date(Date.now() - this.timezoneOffsetMinutes * 60 * 1000);
   }
+  // 作用：将日期映射为中文星期标签
   private getWeekdayLabel(date: Date): string {
     const labels = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
     return labels[date.getUTCDay()];
   }
 
+  // 作用：判断给定日期字符串是否为“今天”
   private isTodayDate(dateStr?: string | null): boolean {
     if (!dateStr) return false;
     const today = this.getUserNow();
@@ -664,6 +756,11 @@ ${groupsList}
     return dateStr === `${yyyy}-${mm}-${dd}`;
   }
 
+  /*
+  默认时段与“今天限制”规则单独封装，
+  是为了让时间策略集中可控，避免散落在多处逻辑里导致不一致。
+  */
+  // 作用：在缺少时间线索时给出默认时段
   private getDefaultTimeSegmentForDate(dateStr: string): TimeSegment {
     if (!this.isTodayDate(dateStr)) return "all_day";
     const current = this.getCurrentTimeSegment();
@@ -671,6 +768,7 @@ ${groupsList}
     return "all_day";
   }
 
+  // 作用：判断“今天”情况下目标时段是否合法
   private isSegmentAllowedForToday(dateStr: string, segment: TimeSegment): boolean {
     if (!this.isTodayDate(dateStr)) return true;
     const current = this.getCurrentTimeSegment();
@@ -679,6 +777,7 @@ ${groupsList}
     const targetOrder = this.getTimeSegmentOrder(segment);
     return targetOrder >= currentOrder;
   }
+  // 作用：生成“时段不可选”的用户提示文案
   private buildSegmentNotAllowedMessage(target: TimeSegment): string {
     const nowLabel = this.formatTimeSegmentLabel(this.getCurrentTimeSegment());
     const targetLabel = this.formatTimeSegmentLabel(target);
@@ -688,6 +787,7 @@ ${groupsList}
     return `现在已经是${nowLabel}了，无法选择${targetLabel}时间段。请确认要改成${nowLabel}或更晚的时间段，或提供具体时间段。`;
   }
 
+  // 作用：获取用户时区下的今日日期字符串
   private getTodayDate(): string {
     const now = this.getUserNow();
     const yyyy = now.getUTCFullYear();
@@ -696,6 +796,7 @@ ${groupsList}
     return `${yyyy}-${mm}-${dd}`;
   }
 
+  // 作用：对任务标题做语义归一化，便于后续相似度判断
   private normalizeTaskTitle(title: string): string {
     let text = title.toLowerCase();
     const replacements: Array<[RegExp, string]> = [
@@ -717,6 +818,7 @@ ${groupsList}
     return text;
   }
 
+  // 作用：构建字符串的二元组集合以支持相似度计算
   private buildBigrams(text: string): Set<string> {
     const chars = Array.from(text);
     const bigrams = new Set<string>();
@@ -726,6 +828,7 @@ ${groupsList}
     return bigrams;
   }
 
+  // 作用：计算两个字符串的 Dice 系数相似度
   private diceCoefficient(a: string, b: string): number {
     if (!a || !b) return 0;
     if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
@@ -738,6 +841,7 @@ ${groupsList}
     return (2 * intersection) / (aBigrams.size + bBigrams.size);
   }
 
+  // 作用：判断两个标题是否语义近似或重复
   private isSemanticDuplicate(newTitle: string, existingTitle: string): boolean {
     if (!newTitle || !existingTitle) return false;
     if (newTitle === existingTitle) return true;
@@ -745,6 +849,7 @@ ${groupsList}
     return this.diceCoefficient(newTitle, existingTitle) >= 0.75;
   }
 
+  // 作用：找出与新任务语义冲突的已有任务
   private findSemanticConflicts(tasks: TaskInfo[], title: string): TaskInfo[] {
     const normalizedNew = this.normalizeTaskTitle(title);
     if (!normalizedNew) return [];
@@ -754,24 +859,26 @@ ${groupsList}
     });
   }
 
-  private filterTimeConflicts(
-    tasks: TaskInfo[],
-    startTime: string,
-    endTime: string,
-  ): TaskInfo[] {
+  // 作用：筛出时间段发生重叠的任务
+  private filterTimeConflicts(tasks: TaskInfo[], startTime: string, endTime: string): TaskInfo[] {
     return tasks.filter((t) => {
       if (!t.startTime || !t.endTime) return false;
       return t.startTime < endTime && t.endTime > startTime;
     });
   }
 
-  private mergeConflictingTasks(timeConflicts: TaskInfo[], semanticConflicts: TaskInfo[]): TaskInfo[] {
+  // 作用：合并语义与时间冲突结果并去重
+  private mergeConflictingTasks(
+    timeConflicts: TaskInfo[],
+    semanticConflicts: TaskInfo[],
+  ): TaskInfo[] {
     const merged = new Map<number, TaskInfo>();
     timeConflicts.forEach((t) => merged.set(t.id, t));
     semanticConflicts.forEach((t) => merged.set(t.id, t));
     return Array.from(merged.values());
   }
 
+  // 作用：获取指定日期的待办任务集合用于冲突判断
   private async getTasksForDate(userId: number, dueDate: string): Promise<TaskInfo[]> {
     const taskService = new TaskService(this.db);
     const result = await taskService.getTasks(userId, {
@@ -782,17 +889,20 @@ ${groupsList}
   }
 
   // == 冲突检测：检查时间段是否与已有任务重叠 ==
+  // 作用：在指定日期内计算时间冲突任务
   private async checkTimeConflict(
     userId: number,
     dueDate: string,
     startTime: string,
     endTime: string,
   ): Promise<TaskInfo[]> {
+    // 只在具体时间段模式下计算冲突，避免把“全天/模糊时段”错误当作重叠
     const tasks = await this.getTasksForDate(userId, dueDate);
     return this.filterTimeConflicts(tasks, startTime, endTime);
   }
 
   // == Tool 层：执行工具调用（每个 case 独立，加新功能只需加 case）==
+  // 作用：根据工具名执行任务并统一收集结果
   private async executeToolCall(
     userId: number,
     toolName: string,
@@ -801,6 +911,10 @@ ${groupsList}
     userMessage: string,
     options?: { skipSemanticConflictCheck?: boolean },
   ): Promise<string> {
+    /*
+    把工具调用集中在一个函数中，便于统一记录日志与收集结果，
+    也能避免对话循环里混入大量业务分支，降低维护成本。
+    */
     console.log(
       "[ai.tool.start]",
       JSON.stringify({
@@ -833,10 +947,12 @@ ${groupsList}
           : timeSegment || this.inferTimeSegmentFromText(userMessage);
 
         if (!hasTimeRange && !timeSegment && !hasSegmentHint && !hasExplicitTime) {
+          // 用户没给任何时间线索时，使用可解释的默认策略，避免反复追问
           finalTimeSegment = this.getDefaultTimeSegmentForDate(dueDate);
         }
 
         if (finalTimeSegment && !this.isSegmentAllowedForToday(dueDate, finalTimeSegment)) {
+          // 今天已过时段时直接提示，避免创建无意义任务
           return this.buildSegmentNotAllowedMessage(finalTimeSegment);
         }
 
@@ -1044,6 +1160,12 @@ ${groupsList}
    * 把结果回传给 Model -> 循环直到最终文本回复。
    */
   async chat(userId: number, message: string): Promise<AIServiceResult> {
+    // 作用：作为对话主入口驱动模型与工具的协作流程
+    /*
+    主循环负责把“模型推理”和“确定性执行”解耦：
+    模型给出工具调用，代码执行后再把结果回传模型生成最终回复。
+    这样可以同时保留可控性与对话体验。
+    */
     const llm = this.createLLM();
     const systemPrompt = await this.buildSystemPrompt(userId);
     const chatHistory = await this.loadHistory(userId);
@@ -1086,11 +1208,15 @@ ${groupsList}
 
     // Agent 调用循环（最多 10 轮，防止无限循环）
     for (let i = 0; i < 10; i++) {
+      // 首轮强制工具调用是为了在必要时确保进入可执行路径，减少“空口回答”
       const toolChoice =
         i === 0 && (this.shouldRequireToolCall(message) || skipSemanticConflictCheck)
           ? "required"
           : undefined;
-      const response = await llm.invoke(messages, { tools: TOOL_DEFINITIONS, tool_choice: toolChoice });
+      const response = await llm.invoke(messages, {
+        tools: TOOL_DEFINITIONS,
+        tool_choice: toolChoice,
+      });
       console.log(
         "[ai.llm.response]",
         JSON.stringify({
@@ -1195,31 +1321,3 @@ ${groupsList}
     return { content: fallback, type: "text" };
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

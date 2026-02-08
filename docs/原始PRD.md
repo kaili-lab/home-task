@@ -1,4 +1,4 @@
-## 重要更新（时间段逻辑）
+﻿## 重要更新（时间段逻辑）
 
 - 任务时间分为两种模式：具体时间段（startTime + endTime）与模糊时间段（timeSegment）。
 - 模糊时间段取值：all_day / morning / afternoon / evening。
