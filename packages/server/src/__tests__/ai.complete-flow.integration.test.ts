@@ -634,7 +634,8 @@ describe("AI 代理完整流程集成测试", () => {
      */
     itIfReady("应成功创建 inviteCode 长度小于 20 字符的分组", async () => {
       // 创建 10 字符的 inviteCode
-      const validInviteCode = "short12345"; // 10 字符
+      // 使用随机短码避免复用同一 inviteCode 触发唯一约束
+      const validInviteCode = `s${Date.now().toString().slice(-9)}`; // 10 字符
 
       const groupResult = await db
         .insert(groups)

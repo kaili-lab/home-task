@@ -54,7 +54,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
         {/* 任务卡片（仅 AI 消息） */}
         {!isUser && message.payload?.task && (
-          <div className="mt-3 max-w-md w-full bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200 text-gray-800">
+          <div className="mt-3 max-w-md w-full bg-linear-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200 text-gray-800">
             <div className="flex items-start gap-2">
               <span className="text-lg">✅</span>
               <div className="flex-1">
@@ -62,7 +62,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 <div className="text-sm text-gray-700 mt-2 space-y-1">
                   <p>📅 {message.payload.task.dueDate}</p>
                   {message.payload.task.startTime ? (
-                    <p>⏰ {message.payload.task.startTime}-{message.payload.task.endTime}</p>
+                    <p>
+                      ⏰ {message.payload.task.startTime}-{message.payload.task.endTime}
+                    </p>
                   ) : (
                     <p>⏰ {formatTimeSegment(message.payload.task.timeSegment)}</p>
                   )}
@@ -74,23 +76,25 @@ export function ChatMessage({ message }: ChatMessageProps) {
         )}
 
         {/* 冲突警告（仅 AI 消息） */}
-        {!isUser && message.payload?.conflictingTasks && message.payload.conflictingTasks.length > 0 && (
-          <div className="mt-3 max-w-md w-full bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200 text-gray-800">
-            <div className="flex items-start gap-2">
-              <span className="text-lg">⚠️</span>
-              <div className="flex-1">
-                <h4 className="font-semibold text-red-900">时间冲突</h4>
-                <div className="text-sm text-gray-700 mt-2 space-y-1">
-                  {message.payload.conflictingTasks.map((task, idx) => (
-                    <p key={idx}>
-                      • {task.title} ({task.startTime}-{task.endTime})
-                    </p>
-                  ))}
+        {!isUser &&
+          message.payload?.conflictingTasks &&
+          message.payload.conflictingTasks.length > 0 && (
+            <div className="mt-3 max-w-md w-full bg-linear-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200 text-gray-800">
+              <div className="flex items-start gap-2">
+                <span className="text-lg">⚠️</span>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-red-900">时间冲突</h4>
+                  <div className="text-sm text-gray-700 mt-2 space-y-1">
+                    {message.payload.conflictingTasks.map((task, idx) => (
+                      <p key={idx}>
+                        • {task.title} ({task.startTime}-{task.endTime})
+                      </p>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   );

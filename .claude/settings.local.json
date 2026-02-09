@@ -10,7 +10,10 @@
       "Bash(node -e:*)",
       "Bash(npx vitest:*)",
       "Bash(taskkill:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pnpm -C packages/server exec tsc:*)",
+      "Bash(pnpm -C packages/server test)",
+      "Bash(Set-Location D:webmy-projectshome-task)"
     ]
   }
 }

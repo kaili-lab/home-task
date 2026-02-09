@@ -16,7 +16,7 @@ import type {
 } from "shared";
 
 /**
-  * 任务Service层 * 处理任务相关的业务逻辑
+ * 任务Service层 * 处理任务相关的业务逻辑
  */
 export class TaskService {
   constructor(private db: DbInstance) {}

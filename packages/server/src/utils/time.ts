@@ -1,4 +1,5 @@
 export function toUtcIso(value: Date | string): string;
+export function toUtcIso(value: Date | string | null | undefined): string | null;
 export function toUtcIso(value: null | undefined): null;
 export function toUtcIso(value: Date | string | null | undefined): string | null {
   // 统一按 UTC 解析与输出，避免无时区字符串被 JS 当成本地时区而产生偏移

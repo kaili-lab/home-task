@@ -26,7 +26,7 @@ const TOOL_DEFINITIONS = [
     function: {
       name: "create_task",
       description:
-        "创建一个新任务。当用户明确要求创建任务且信息充分时调用。若用户未指定日期，强制默认今天；若用户仅提到模糊时间段（全天/凌晨/早上/上午/中午/下午/晚上）且无具体时间，直接传 timeSegment，不追问时间。",
+        "创建一个新任务。直接调用即可，工具内部会自动检测语义冲突（重复任务）和时间冲突，无需事先用 query_tasks 查询。若用户未指定日期，强制默认今天；若用户仅提到模糊时间段（全天/凌晨/早上/上午/中午/下午/晚上）且无具体时间，直接传 timeSegment，不追问时间。时间合理性校验由工具自动完成。",
       parameters: {
         type: "object",
         properties: {
@@ -80,7 +80,7 @@ const TOOL_DEFINITIONS = [
     function: {
       name: "query_tasks",
       description:
-        "查询用户的任务列表。当用户想要查看、列出、查找任务时调用。修改或删除任务前如不确定任务 ID，也先用此工具查询。",
+        "查询用户的任务列表。当用户想要查看、列出、查找任务时调用。修改或删除任务前如不确定任务 ID，也先用此工具查询。注意：创建任务时无需先查询，create_task 内部会自动检测冲突。",
       parameters: {
         type: "object",
         properties: {
@@ -202,14 +202,22 @@ export interface AIServiceResult {
 
 type ToolActionType = "create" | "update" | "complete" | "delete";
 
-type ResultCapture = {
-  task?: TaskInfo;
-  conflictingTasks?: TaskInfo[];
-  actionPerformed?: ToolActionType;
-  responseTypeOverride?: "text" | "task_summary" | "question";
-  // 用于在时间不合理时强制追问并中止后续 LLM 回合，避免模型擅自纠正
-  forcedReply?: string;
-};
+// Tool 执行状态：区分成功、冲突、需确认、错误四种情况，驱动主循环的分支控制
+type ToolResultStatus =
+  | "success"            // 操作成功完成
+  | "conflict"           // 存在冲突（语义/时间），需要用户决策
+  | "need_confirmation"  // 需要用户确认（如时间已过、删除确认）
+  | "error";             // 操作失败
+
+// 统一的 Tool 返回类型 — 替代原先的纯文本 + ResultCapture 副作用模式
+interface ToolResult {
+  status: ToolResultStatus;
+  message: string;                    // 给 LLM 阅读的文本摘要
+  task?: TaskInfo;                    // 创建/更新/完成后的任务实体
+  conflictingTasks?: TaskInfo[];      // 冲突的任务列表
+  actionPerformed?: ToolActionType;   // 实际执行了什么操作（未执行时不设置）
+  responseType?: "text" | "task_summary" | "question"; // 前端渲染类型提示
+}
 
 // ==================== AIService ====================
 
@@ -342,81 +350,46 @@ export class AIService {
 - 用户群组：
 ${groupsList}
 
-## 一、信息提取
+## 信息提取
 
 从用户的自然语言描述中推理出任务字段：
 - **title**：简洁的动作短语（如"去4S店取车"、"开家长会"）
 - **description**：title 无法涵盖的补充信息（如地点、注意事项）；用户未提及则省略
-- **dueDate**：用户未指定日期时，强制默认今天（${today}），不得擅自推断为其他日期
-- **priority**：用户未指定时不传
+- **dueDate**：用户未指定日期时强制默认今天（${today}），不得擅自推断为其他日期
 
-## 二、时间处理
+## 时间处理
 
-任务时间分为两种模式，**互斥**：
+任务时间分为两种模式：
+- **具体时间**：传 startTime + endTime（必须成对）
+  - 用户用12小时制且未说明上午/下午时，追问确认
+  - **重要：用户只说了开始时间没给结束时间（如"3点开始开会"），必须追问结束时间，禁止自行猜测**
+  - **只出现一个时间点时，仅提取为 startTime，endTime 为空/不传，必须追问结束时间**
+- **模糊时段**：传 timeSegment（全天/凌晨/早上/上午/中午/下午/晚上）
+- 两种模式互斥；用户都没提时不传时间字段，工具会自动处理
+- 时间合理性校验由工具自动完成，无需你判断
 
-**模式A — 具体时间范围（startTime + endTime）：**
-- 必须同时有开始和结束时间
-- 用户用12小时制且未说明上午/下午（如"4点到5点"），必须追问确认
-- 用户用24小时制（如"14点到15点"）或已说明（如"下午4点到5点"），无需追问
-- 用户只给了开始时间没给结束时间，必须追问
+## 意图识别
 
-**模式B — 模糊时间段（timeSegment）：**
-- 用户提到以下关键词时，传对应的 timeSegment 值，不追问：
-  - 全天 → all_day
-  - 凌晨 → early_morning
-  - 早上 → morning
-  - 上午 → forenoon
-  - 中午 → noon
-  - 下午 → afternoon
-  - 晚上 → evening
-- 用户既没说具体时间也没说模糊时间段时：
-  - 任务日期是今天且当前已是晚上 → 传 timeSegment = evening
-  - 其他情况 → 传 timeSegment = all_day
-- 若任务日期是今天且用户给出的时间段或具体时间已过，必须追问确认，不能自动纠正
-- 模糊时间段判断以用户原话为准，不得自行替换
+注意区分以下意图，不要混淆：
+- "完成XXX"、"XXX做完了"、"搞定了XXX" → 标记已有任务为完成（complete_task），不是创建新任务
+- "删除XXX"、"取消XXX任务" → 删除已有任务（delete_task），不是创建新任务
+- "修改XXX"、"把XXX改成..." → 更新已有任务（update_task），不是创建新任务
+- "提醒我XXX"、"帮我安排XXX"、"创建XXX" → 创建新任务（create_task）
 
-两种模式互斥：有具体时间时不传 timeSegment，有 timeSegment 时不传 startTime/endTime。
+## 工具使用指导
 
-## 三、创建任务
+- **创建任务**：直接调用 create_task，工具内部会自动检测语义冲突和时间冲突并返回结果
+- **查询任务**：调用 query_tasks。用户未指定日期时，必须先提醒用户指定具体日期，不要直接查询全部任务
+- **更新任务**：需要任务 ID，不确定时先用 query_tasks 查找
+- **完成任务**：需要任务 ID，不确定时先用 query_tasks 查找
+- **删除任务**：需要任务 ID，删除前必须向用户确认
 
-**步骤：**
-1. 先调用 query_tasks 查询该日期的所有任务
-2. 拿到结果后，做两项判断：
-   - **语义冲突**：新任务与已有任务是否表达相同的事（如"取快递"≈"拿快递"≈"去拿包裹"）
-   - **时间冲突**：仅当新任务有具体时间段时，检查是否与已有任务时间重叠，如果是segment模式则不检查时间冲突，只检查语义冲突
-   - 需要两个都不冲突才直接创建
-3. 根据判断结果：
-   - 无冲突 → 直接调用 create_task
-   - 仅语义冲突 → 提示用户"你当天已有类似任务：XXX"，请求确认后再创建
-   - 仅时间冲突 → 提示用户时间段被占用，建议调整时间
-   - 两者都有 → 同时说明两种冲突
-4. 用户确认后，再调用 create_task
-
-## 四、查询任务
-
-- 用户未指定日期 → 提醒用户需要指定具体日期
-- 仅支持查询具体某一天，不支持日期范围查询；用户要求日期范围查询时需告知暂不支持
-
-## 五、更新任务
-
-- 不确定目标任务时，先调用 query_tasks 查找，向用户确认是哪个任务
-- 涉及时间变更时，需要做冲突检测（流程同创建任务，但排除当前正在修改的任务本身）
-
-## 六、完成任务
-
-- 不确定目标任务时，先调用 query_tasks 查找确认
-
-## 七、删除任务
-
-- 删除前必须向用户确认，说明将要删除的任务信息
-
-## 八、群组任务
+## 群组任务
 
 - 用户提到群组时，从「用户群组」列表中模糊匹配（如"骑行大队" → "骑行群"）：
   - 匹配到唯一群组 → 直接使用
   - 匹配到多个候选 → 列出候选，让用户选择
   - 无法匹配 → 告知用户当前加入的群组列表
-- 群组任务的时间规则和冲突检测与个人任务相同
 
 ## 回复规范
 
@@ -935,15 +908,14 @@ ${groupsList}
   }
 
   // == Tool 层：执行工具调用（每个 case 独立，加新功能只需加 case）==
-  // 作用：根据工具名执行任务并统一收集结果
+  // 作用：根据工具名执行任务，返回结构化 ToolResult，不再通过副作用传递状态
   private async executeToolCall(
     userId: number,
     toolName: string,
     toolArgs: Record<string, unknown>,
-    resultCapture: ResultCapture,
     userMessage: string,
     options?: { skipSemanticConflictCheck?: boolean },
-  ): Promise<string> {
+  ): Promise<ToolResult> {
     /*
     把工具调用集中在一个函数中，便于统一记录日志与收集结果，
     也能避免对话循环里混入大量业务分支，降低维护成本。
@@ -976,22 +948,34 @@ ${groupsList}
           this.hasExplicitTimeRange(userMessage) || this.hasExplicitTimePoint(userMessage);
         const hasSegmentHint = this.hasTimeSegmentHint(userMessage);
         const hasDateHint = this.hasDateHint(userMessage);
-        // 用户未提及日期时强制按“今天”处理，避免模型自行推断造成偏差
+        // 必须在工具层强制追问结束时间，避免仅靠提示词导致模型继续创建而偏离业务规则
+        if (hasExplicitTime && !hasTimeRange) {
+          return {
+            status: "need_confirmation",
+            message: "你提到开始时间了，还需要结束时间或时长。请问几点结束/到几点/多久？",
+            responseType: "question",
+          };
+        }
+        // 用户未提及日期时强制按"今天"处理，避免模型自行推断造成偏差
         const effectiveDueDate = hasDateHint && dueDate ? dueDate : this.getTodayDate();
         const hintedSegment = hasSegmentHint ? this.inferTimeSegmentFromText(userMessage) : null;
 
+        // 时段已过校验：用户说了模糊时段但当前已过该时段
         if (hintedSegment && !this.isSegmentAllowedForToday(effectiveDueDate, hintedSegment)) {
-          const content = this.buildSegmentNotAllowedMessage(hintedSegment);
-          resultCapture.forcedReply = content;
-          resultCapture.responseTypeOverride = "question";
-          return content;
+          return {
+            status: "need_confirmation",
+            message: this.buildSegmentNotAllowedMessage(hintedSegment),
+            responseType: "question",
+          };
         }
 
+        // 具体时间已过校验：今天的具体时间段已过
         if (hasTimeRange && this.isTimeRangePassedForToday(effectiveDueDate, startTime, endTime)) {
-          const content = `今天已过你提到的时间段（${startTime}-${endTime}）。请确认是否改到今天稍后或明天，或提供新的时间段。`;
-          resultCapture.forcedReply = content;
-          resultCapture.responseTypeOverride = "question";
-          return content;
+          return {
+            status: "need_confirmation",
+            message: `今天已过你提到的时间段（${startTime}-${endTime}）。请确认是否改到今天稍后或明天，或提供新的时间段。`,
+            responseType: "question",
+          };
         }
 
         let finalTimeSegment = hasTimeRange
@@ -1003,11 +987,19 @@ ${groupsList}
           finalTimeSegment = this.getDefaultTimeSegmentForDate(effectiveDueDate);
         }
 
-        if (finalTimeSegment && !this.isSegmentAllowedForToday(effectiveDueDate, finalTimeSegment)) {
+        if (
+          finalTimeSegment &&
+          !this.isSegmentAllowedForToday(effectiveDueDate, finalTimeSegment)
+        ) {
           // 今天已过时段时直接提示，避免创建无意义任务
-          return this.buildSegmentNotAllowedMessage(finalTimeSegment);
+          return {
+            status: "need_confirmation",
+            message: this.buildSegmentNotAllowedMessage(finalTimeSegment),
+            responseType: "question",
+          };
         }
 
+        // 冲突检测：内聚在 create_task 内部，LLM 无需先 query 再 create
         const skipSemanticConflictCheck = options?.skipSemanticConflictCheck === true;
         const tasksForDate = await this.getTasksForDate(userId, effectiveDueDate);
         const timeConflicts =
@@ -1019,34 +1011,39 @@ ${groupsList}
         const hasSemanticConflicts = semanticConflicts.length > 0;
 
         if (hasTimeConflicts || hasSemanticConflicts) {
-          resultCapture.conflictingTasks = this.mergeConflictingTasks(
-            timeConflicts,
-            semanticConflicts,
-          );
+          const merged = this.mergeConflictingTasks(timeConflicts, semanticConflicts);
           const formatTaskTime = (task: TaskInfo) =>
             task.startTime && task.endTime
               ? `${task.startTime}-${task.endTime}`
               : this.formatTimeSegmentLabel(task.timeSegment);
+
+          let message: string;
           if (hasTimeConflicts && !hasSemanticConflicts) {
             const conflictInfo = timeConflicts
               .map((t) => `- ${t.title}（${formatTaskTime(t)}）`)
               .join("\n");
-            return `时间冲突！以下任务与请求时间段重叠：\n${conflictInfo}\n请调整时间后再创建。`;
-          }
-          if (!hasTimeConflicts && hasSemanticConflicts) {
-            resultCapture.responseTypeOverride = "question";
+            message = `时间冲突！以下任务与请求时间段重叠：\n${conflictInfo}\n请调整时间后再创建。`;
+          } else if (!hasTimeConflicts && hasSemanticConflicts) {
             const conflictInfo = semanticConflicts
               .map((t) => `- ${t.title}（${formatTaskTime(t)}）`)
               .join("\n");
-            return `你当天已有类似任务：\n${conflictInfo}\n是否仍要创建？回复“确认”继续创建。`;
+            message = `你当天已有类似任务：\n${conflictInfo}\n是否仍要创建？回复"确认"继续创建。`;
+          } else {
+            const timeInfo = timeConflicts
+              .map((t) => `- ${t.title}（${formatTaskTime(t)}）`)
+              .join("\n");
+            const semanticInfo = semanticConflicts
+              .map((t) => `- ${t.title}（${formatTaskTime(t)}）`)
+              .join("\n");
+            message = `时间冲突：\n${timeInfo}\n同时你当天已有类似任务：\n${semanticInfo}\n请先调整时间后再创建。`;
           }
-          const timeInfo = timeConflicts
-            .map((t) => `- ${t.title}（${formatTaskTime(t)}）`)
-            .join("\n");
-          const semanticInfo = semanticConflicts
-            .map((t) => `- ${t.title}（${formatTaskTime(t)}）`)
-            .join("\n");
-          return `时间冲突：\n${timeInfo}\n同时你当天已有类似任务：\n${semanticInfo}\n请先调整时间后再创建。`;
+
+          return {
+            status: "conflict",
+            message,
+            conflictingTasks: merged,
+            responseType: "question",
+          };
         }
 
         const task = await taskService.createTask(userId, {
@@ -1062,8 +1059,6 @@ ${groupsList}
           assignedToIds: [userId],
         });
 
-        resultCapture.task = task;
-        resultCapture.actionPerformed = "create";
         console.log(
           "[ai.tool.success]",
           JSON.stringify({
@@ -1076,7 +1071,13 @@ ${groupsList}
         const timeInfo = task.startTime
           ? `，时间${task.startTime}-${task.endTime}`
           : `（${this.formatTimeSegmentLabel(task.timeSegment)}）`;
-        return `任务创建成功！标题"${task.title}"，日期${task.dueDate}${timeInfo}`;
+        return {
+          status: "success",
+          message: `任务创建成功！标题"${task.title}"，日期${task.dueDate}${timeInfo}`,
+          task,
+          actionPerformed: "create",
+          responseType: "task_summary",
+        };
       }
 
       case "query_tasks": {
@@ -1096,7 +1097,9 @@ ${groupsList}
           priority: priority as "high" | "medium" | "low" | undefined,
         });
 
-        if (result.tasks.length === 0) return "没有找到符合条件的任务。";
+        if (result.tasks.length === 0) {
+          return { status: "success", message: "没有找到符合条件的任务。" };
+        }
 
         console.log(
           "[ai.tool.success]",
@@ -1107,7 +1110,7 @@ ${groupsList}
             resultCount: result.tasks.length,
           }),
         );
-        return result.tasks
+        const message = result.tasks
           .map(
             (t) =>
               `[ID:${t.id}] ${t.title} | 日期:${t.dueDate} | ${
@@ -1117,6 +1120,7 @@ ${groupsList}
               } | 状态:${t.status} | 优先级:${t.priority}`,
           )
           .join("\n");
+        return { status: "success", message };
       }
 
       case "update_task": {
@@ -1142,8 +1146,6 @@ ${groupsList}
           priority: priority as "high" | "medium" | "low" | undefined,
         });
 
-        resultCapture.task = task;
-        resultCapture.actionPerformed = "update";
         console.log(
           "[ai.tool.success]",
           JSON.stringify({
@@ -1156,14 +1158,18 @@ ${groupsList}
         const timeInfo = task.startTime
           ? `，时间${task.startTime}-${task.endTime}`
           : `（${this.formatTimeSegmentLabel(task.timeSegment)}）`;
-        return `任务更新成功！标题"${task.title}"，日期${task.dueDate}${timeInfo}`;
+        return {
+          status: "success",
+          message: `任务更新成功！标题"${task.title}"，日期${task.dueDate}${timeInfo}`,
+          task,
+          actionPerformed: "update",
+          responseType: "task_summary",
+        };
       }
 
       case "complete_task": {
         const { taskId } = toolArgs as { taskId: number };
         const task = await taskService.updateTaskStatus(taskId, userId, "completed");
-        resultCapture.task = task;
-        resultCapture.actionPerformed = "complete";
         console.log(
           "[ai.tool.success]",
           JSON.stringify({
@@ -1173,13 +1179,18 @@ ${groupsList}
             taskId: task.id,
           }),
         );
-        return `任务 "${task.title}" 已标记为完成。`;
+        return {
+          status: "success",
+          message: `任务 "${task.title}" 已标记为完成。`,
+          task,
+          actionPerformed: "complete",
+          responseType: "task_summary",
+        };
       }
 
       case "delete_task": {
         const { taskId } = toolArgs as { taskId: number };
         await taskService.deleteTask(taskId, userId);
-        resultCapture.actionPerformed = "delete";
         console.log(
           "[ai.tool.success]",
           JSON.stringify({
@@ -1189,7 +1200,11 @@ ${groupsList}
             taskId,
           }),
         );
-        return "任务已删除。";
+        return {
+          status: "success",
+          message: "任务已删除。",
+          actionPerformed: "delete",
+        };
       }
 
       default:
@@ -1201,7 +1216,7 @@ ${groupsList}
             toolName,
           }),
         );
-        return `未知工具：${toolName}`;
+        return { status: "error", message: `未知工具：${toolName}` };
     }
   }
 
@@ -1214,9 +1229,9 @@ ${groupsList}
   async chat(userId: number, message: string): Promise<AIServiceResult> {
     // 作用：作为对话主入口驱动模型与工具的协作流程
     /*
-    主循环负责把“模型推理”和“确定性执行”解耦：
+    主循环负责把"模型推理"和"确定性执行"解耦：
     模型给出工具调用，代码执行后再把结果回传模型生成最终回复。
-    这样可以同时保留可控性与对话体验。
+    ToolResult 驱动流程控制：need_confirmation/conflict 直接返回用户，success 回传 LLM。
     */
     const llm = this.createLLM();
     const systemPrompt = await this.buildSystemPrompt(userId);
@@ -1227,7 +1242,8 @@ ${groupsList}
       lastAssistantMessage?.content,
     );
     const inferredIntent = this.inferTaskIntent(message);
-    const resultCapture: ResultCapture = {};
+    // 累积最后一个有意义的 ToolResult，用于最终回复时提取 payload
+    let lastSignificantResult: ToolResult | null = null;
     console.log(
       "[ai.chat.start]",
       JSON.stringify({
@@ -1240,7 +1256,7 @@ ${groupsList}
       }),
     );
 
-    // 规则兜底：用户明确说“今天上午/下午”等但当前已过该时间段，直接提醒确认
+    // 规则兜底：用户明确说"今天上午/下午"等但当前已过该时间段，直接提醒确认
     if (message.includes("今天") && this.hasTimeSegmentHint(message)) {
       const hinted = this.inferTimeSegmentFromText(message);
       if (!this.isSegmentAllowedForToday(this.getTodayDate(), hinted)) {
@@ -1260,7 +1276,7 @@ ${groupsList}
 
     // Agent 调用循环（最多 10 轮，防止无限循环）
     for (let i = 0; i < 10; i++) {
-      // 首轮强制工具调用是为了在必要时确保进入可执行路径，减少“空口回答”
+      // 首轮强制工具调用是为了在必要时确保进入可执行路径，减少"空口回答"
       const toolChoice =
         i === 0 && (this.shouldRequireToolCall(message) || skipSemanticConflictCheck)
           ? "required"
@@ -1289,25 +1305,25 @@ ${groupsList}
       if (!response.tool_calls || response.tool_calls.length === 0) {
         let content = typeof response.content === "string" ? response.content : "";
 
-        if (!resultCapture.actionPerformed && this.looksLikeActionSuccess(content)) {
-          if (resultCapture.conflictingTasks && resultCapture.conflictingTasks.length > 0) {
+        // 幻觉检测：LLM 未实际执行操作却声称已完成
+        const hasAction = lastSignificantResult?.actionPerformed;
+        if (!hasAction && this.looksLikeActionSuccess(content)) {
+          if (lastSignificantResult?.conflictingTasks && lastSignificantResult.conflictingTasks.length > 0) {
             content = "当前任务存在冲突或重复，请确认或调整后再创建。";
-            resultCapture.responseTypeOverride = resultCapture.responseTypeOverride || "question";
           } else {
             content = this.buildActionNotExecutedMessage(inferredIntent);
-            resultCapture.responseTypeOverride = "question";
           }
         }
 
-        // 确定响应类型
+        // 从最后一个有意义的 ToolResult 中提取 payload 和渲染类型
         const type: "text" | "task_summary" | "question" =
-          resultCapture.responseTypeOverride || (resultCapture.task ? "task_summary" : "text");
+          lastSignificantResult?.responseType || (lastSignificantResult?.task ? "task_summary" : "text");
 
         // 保存数据库
         await this.saveMessage(userId, "user", message);
         await this.saveMessage(userId, "assistant", content, type, {
-          task: resultCapture.task,
-          conflictingTasks: resultCapture.conflictingTasks,
+          task: lastSignificantResult?.task,
+          conflictingTasks: lastSignificantResult?.conflictingTasks,
         });
         console.log(
           "[ai.chat.end]",
@@ -1315,7 +1331,7 @@ ${groupsList}
             requestId: this.requestId,
             userId,
             type,
-            hasTask: !!resultCapture.task,
+            hasTask: !!lastSignificantResult?.task,
           }),
         );
 
@@ -1323,21 +1339,20 @@ ${groupsList}
           content,
           type,
           payload: {
-            task: resultCapture.task,
-            conflictingTasks: resultCapture.conflictingTasks,
+            task: lastSignificantResult?.task,
+            conflictingTasks: lastSignificantResult?.conflictingTasks,
           },
         };
       }
 
-      // 有 Tool Call -> 逐个执行，结果加入消息列表
+      // 有 Tool Call -> 逐个执行，根据 ToolResult 状态决定后续流程
       for (const toolCall of response.tool_calls) {
-        let toolResult: string;
+        let toolResult: ToolResult;
         try {
           toolResult = await this.executeToolCall(
             userId,
             toolCall.name,
             toolCall.args,
-            resultCapture,
             message,
             { skipSemanticConflictCheck },
           );
@@ -1353,16 +1368,30 @@ ${groupsList}
           );
           throw error;
         }
-        if (resultCapture.forcedReply) {
-          // 需要追问时直接返回，避免继续回到 LLM 导致自动纠正或误创建
-          const content = resultCapture.forcedReply;
-          await this.saveMessage(userId, "user", message);
-          await this.saveMessage(userId, "assistant", content, "question");
-          return { content, type: "question" };
+
+        // 记录有意义的结果（有 task、冲突、或执行了操作的）
+        if (toolResult.task || toolResult.conflictingTasks || toolResult.actionPerformed) {
+          lastSignificantResult = toolResult;
         }
-        // 工具调用必须包含 ID，用于将结果关联回工具调用
+
+        // need_confirmation / conflict → 直接返回用户，不再回传 LLM 避免模型擅自纠正
+        if (toolResult.status === "need_confirmation" || toolResult.status === "conflict") {
+          const content = toolResult.message;
+          const type = toolResult.responseType || "question";
+          await this.saveMessage(userId, "user", message);
+          await this.saveMessage(userId, "assistant", content, type, {
+            conflictingTasks: toolResult.conflictingTasks,
+          });
+          return {
+            content,
+            type,
+            payload: { conflictingTasks: toolResult.conflictingTasks },
+          };
+        }
+
+        // success / error → 将文本摘要回传 LLM，让模型生成最终用户回复
         const toolId = toolCall.id || `tool_${Date.now()}_${Math.random()}`;
-        messages.push(new ToolMessage({ content: toolResult, tool_call_id: toolId }));
+        messages.push(new ToolMessage({ content: toolResult.message, tool_call_id: toolId }));
       }
     }
 
