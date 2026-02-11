@@ -14,6 +14,8 @@
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
     "@langchain/core": "^1.1.18",
+    "@langchain/langgraph": "^1.1.4",
+    "@langchain/langgraph-supervisor": "^1.0.1",
     "@langchain/openai": "^1.2.4",
     "@neondatabase/serverless": "^1.0.2",
     "better-auth": "^1.4.18",

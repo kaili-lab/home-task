@@ -44,6 +44,12 @@ export const messageTypeEnum = pgEnum("message_type", ["text", "task_summary", "
 // 消息角色枚举
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system"]);
 
+// 提醒状态枚举
+export const reminderStatusEnum = pgEnum("reminder_status", ["pending", "sent", "cancelled"]);
+
+// 提醒渠道枚举
+export const reminderChannelEnum = pgEnum("reminder_channel", ["console", "sms", "email"]);
+
 // ==================== Better Auth 表 ====================
 // Better Auth 需要的表结构，使用数字自增ID
 
@@ -225,6 +231,20 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// 提醒表
+export const reminders = pgTable("reminders", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  taskId: integer("taskId").references(() => tasks.id, { onDelete: "cascade" }),
+  remindAt: timestamp("remindAt", { withTimezone: true }).notNull(),
+  content: text("content").notNull(),
+  status: reminderStatusEnum("status").notNull().default("pending"),
+  channel: reminderChannelEnum("channel").notNull().default("console"),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ==================== 关系定义 ====================
 
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -301,6 +321,17 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   user: one(users, {
     fields: [messages.userId],
     references: [users.id],
+  }),
+}));
+
+export const remindersRelations = relations(reminders, ({ one }) => ({
+  user: one(users, {
+    fields: [reminders.userId],
+    references: [users.id],
+  }),
+  task: one(tasks, {
+    fields: [reminders.taskId],
+    references: [tasks.id],
   }),
 }));
 

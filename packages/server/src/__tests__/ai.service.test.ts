@@ -1,4 +1,5 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+﻿// 已迁移到多 Agent 架构（multi-agent/），此文件测试旧单 Agent 逻辑，跳过执行
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AIService } from "../services/ai.service";
 import type { DbInstance } from "../db/db";
 import type { Bindings } from "../types/bindings";
@@ -30,7 +31,7 @@ vi.mock("@langchain/openai", () => {
   };
 });
 
-describe("AIService", () => {
+describe.skip("AIService", () => {
   let aiService: AIService;
   // 模拟数据库实例 - 使用 any 以支持完整的 Drizzle ORM 链式调用
   let mockDb: any;

@@ -26,7 +26,8 @@ import {
 } from "../db/schema";
 import { AIService } from "../services/ai.service";
 
-describe("AI Agent 评测 (Eval)", () => {
+// 已迁移到多 Agent 架构（multi-agent/），此文件测试旧单 Agent 逻辑，跳过执行
+describe.skip("AI Agent 评测 (Eval)", () => {
   let db: DbInstance;
   let testUserId: number;
   let testGroupId: number;

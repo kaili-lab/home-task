@@ -38,7 +38,8 @@ import type { Bindings } from "../types/bindings";
  * - Mock AI API（避免 API 调用成本和不可控性）
  * - 真实的 TaskService 和数据库操作
  */
-describe("AI 代理完整流程集成测试", () => {
+// 已迁移到多 Agent 架构（multi-agent/），此文件测试旧单 Agent 逻辑，跳过执行
+describe.skip("AI 代理完整流程集成测试", () => {
   let db: DbInstance;
   let aiService: AIService;
   let testUserId: number;

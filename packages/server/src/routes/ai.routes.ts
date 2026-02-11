@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AuthenticatedVariables } from "../types/variables";
 import type { Bindings } from "../types/bindings";
 import { AIService } from "../services/ai.service";
+import { MultiAgentService } from "../services/multi-agent";
 import { messages as messagesTable } from "../db/schema";
 import { eq, desc } from "drizzle-orm";
 import { getUserId, successResponse } from "../utils/route-helpers";
@@ -40,12 +41,17 @@ aiRoutes.post("/chat", async (c) => {
         timezoneOffsetMinutes,
       }),
     );
-    const aiService = new AIService(
-      db,
-      c.env,
-      Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0,
-      requestId,
-    );
+    const tzOffset = Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0;
+    const useMultiAgent =
+      c.req.query("multi") === "true" || c.req.header("x-multi-agent") === "true";
+    if (useMultiAgent) {
+      // 通过显式开关切换多 Agent，避免对现有逻辑产生破坏
+      const multiService = new MultiAgentService(db, c.env, tzOffset);
+      const result = await multiService.chat(userId, message.trim());
+      return c.json(successResponse(result));
+    }
+
+    const aiService = new AIService(db, c.env, tzOffset, requestId);
     const result = await aiService.chat(userId, message.trim());
 
     return c.json(successResponse(result));

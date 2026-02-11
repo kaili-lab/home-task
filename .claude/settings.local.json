@@ -13,7 +13,15 @@
       "Bash(curl:*)",
       "Bash(pnpm -C packages/server exec tsc:*)",
       "Bash(pnpm -C packages/server test)",
-      "Bash(Set-Location D:webmy-projectshome-task)"
+      "Bash(Set-Location D:webmy-projectshome-task)",
+      "WebFetch(domain:github.com)",
+      "Bash(powershell -Command:*)",
+      "Bash(dir:*)",
+      "WebFetch(domain:langchain-ai.github.io)",
+      "WebFetch(domain:docs.langchain.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:reference.langchain.com)"
     ]
   }
 }

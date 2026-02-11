@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm -C packages/server test -- --testPathPattern=\"multi-agent\" --reporter=verbose)"
+    ]
+  }
+}
