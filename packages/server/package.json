@@ -3,15 +3,19 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "start:node": "tsx src/node.ts",
     "deploy": "wrangler deploy --minify",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "lint": "eslint src",
     "test": "vitest",
+    "test:ci": "vitest run --exclude \"src/__tests__/{aihubmix.llm.connectivity.test.ts,multi-agent/eval/multi-agent.eval.test.ts}\"",
+    "test:external": "vitest run src/__tests__/aihubmix.llm.connectivity.test.ts src/__tests__/multi-agent/eval/multi-agent.eval.test.ts",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "db-push": "npx drizzle-kit push"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.9",
     "@hono/zod-validator": "^0.7.6",
     "@langchain/core": "^1.1.18",
     "@langchain/langgraph": "^1.1.4",

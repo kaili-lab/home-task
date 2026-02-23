@@ -123,7 +123,10 @@ describe("multi-agent.eval", () => {
   // 真实 LLM 调用需要充足的超时时间
   it("端到端核心场景", { timeout: 120_000 }, async () => {
     // 无真实密钥时跳过，避免非预期失败
-    if (!process.env.AIHUBMIX_API_KEY && !process.env.OPENAI_API_KEY) {
+    const openAIKey = process.env.OPENAI_API_KEY;
+    const hasRealOpenAIKey = !!openAIKey && openAIKey !== "test-key";
+
+    if (!process.env.AIHUBMIX_API_KEY && !hasRealOpenAIKey) {
       return;
     }
 

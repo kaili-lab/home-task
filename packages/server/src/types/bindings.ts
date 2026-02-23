@@ -14,10 +14,6 @@ export type Bindings = {
   AIHUBMIX_BASE_URL?: string;
   AIHUBMIX_MODEL_NAME?: string;
 
-  // Google OAuth 配置（可选）
-  GOOGLE_CLIENT_ID?: string;
-  GOOGLE_CLIENT_SECRET?: string;
-
   // 前端地址
   FRONTEND_URL?: string;
 

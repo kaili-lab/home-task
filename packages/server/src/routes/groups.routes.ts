@@ -7,11 +7,23 @@ import { GroupService } from "../services/group.service";
 import { UserService } from "../services/user.service";
 import { getUserId, successResponse } from "../utils/route-helpers";
 import { handleServiceError } from "../utils/error-handler";
+import {
+  clearJoinFailureCounter,
+  consumeJoinRateLimit,
+  extractClientIp,
+  recordInvalidInviteFailure,
+  type JoinRateLimitStore,
+} from "../utils/join-rate-limit";
 
 const groupsRoutes = new Hono<{
   Bindings: Bindings;
   Variables: AuthenticatedVariables;
 }>();
+const joinRateLimitStore: JoinRateLimitStore = new Map();
+
+function isInvalidInviteCodeError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("邀请码无效");
+}
 
 // 创建群组的Zod Schema
 const createGroupSchema = z.object({
@@ -149,14 +161,30 @@ groupsRoutes.patch(
  * 通过邀请码加入群组
  */
 groupsRoutes.post("/join", zValidator("json", joinGroupSchema), async (c) => {
+  let rateLimitKey = "";
   try {
     const session = c.get("session");
     const db = c.get("db");
     const userId = getUserId(session);
     const { inviteCode } = c.req.valid("json");
+    const clientIp = extractClientIp(c.req.raw.headers);
+    rateLimitKey = `${userId}:${clientIp}`;
+
+    // 先做请求频率限流，避免短时间内重复撞邀请码
+    const rateLimit = consumeJoinRateLimit(joinRateLimitStore, rateLimitKey);
+    if (!rateLimit.allowed) {
+      return c.json(
+        {
+          success: false,
+          error: `请求过于频繁，请在 ${rateLimit.retryAfterSeconds} 秒后重试`,
+        },
+        429,
+      );
+    }
 
     const groupService = new GroupService(db);
     const group = await groupService.joinGroupByInviteCode(userId, inviteCode);
+    clearJoinFailureCounter(joinRateLimitStore, rateLimitKey);
 
     return c.json(
       successResponse({
@@ -167,6 +195,19 @@ groupsRoutes.post("/join", zValidator("json", joinGroupSchema), async (c) => {
       201
     );
   } catch (error) {
+    // 仅对“邀请码无效”累计失败次数，达到阈值后进入冷却期
+    if (rateLimitKey && isInvalidInviteCodeError(error)) {
+      const invalidResult = recordInvalidInviteFailure(joinRateLimitStore, rateLimitKey);
+      if (!invalidResult.allowed) {
+        return c.json(
+          {
+            success: false,
+            error: `邀请码尝试次数过多，请在 ${invalidResult.retryAfterSeconds} 秒后重试`,
+          },
+          429,
+        );
+      }
+    }
     return handleServiceError(c, error);
   }
 });

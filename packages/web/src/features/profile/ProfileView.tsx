@@ -18,7 +18,6 @@ export function ProfileView() {
 
   const handleSave = () => {
     // TODO: API 调用保存
-    console.log("保存个人资料:", { name, email, role });
     setIsEditing(false);
   };
 

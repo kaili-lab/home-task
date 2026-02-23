@@ -16,16 +16,47 @@ import { successResponse } from "./utils/route-helpers";
 import { handleServiceError } from "./utils/error-handler";
 
 const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
+// 临时开关：设备公开任务接口先下线，避免在鉴权方案未完成前暴露任务数据
+const ENABLE_PUBLIC_DEVICE_TASKS_ENDPOINT = false;
+const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173"];
+
+function appendAllowedOrigins(target: Set<string>, value?: string): void {
+  if (!value) return;
+  const candidates = value.split(",");
+  for (const rawCandidate of candidates) {
+    const candidate = rawCandidate.trim();
+    if (!candidate) continue;
+
+    try {
+      target.add(new URL(candidate).origin);
+    } catch {
+      // 忽略非法 URL，避免因为配置错误导致服务启动失败
+    }
+  }
+}
+
+function getAllowedOrigins(env: Bindings): string[] {
+  const origins = new Set(DEFAULT_ALLOWED_ORIGINS);
+  appendAllowedOrigins(origins, env.FRONTEND_URL);
+  appendAllowedOrigins(origins, env.BETTER_AUTH_URL);
+  return Array.from(origins);
+}
 
 // ==================== 全局中间件 ====================
 app.use("*", logger());
-app.use(
-  "*",
-  cors({
-    origin: ["http://localhost:5173"],
+app.use("*", async (c, next) => {
+  // 按请求动态读取环境变量，兼容本地/同域/跨域部署三种场景
+  const allowedOrigins = getAllowedOrigins(c.env);
+  const corsMiddleware = cors({
+    origin: (origin) => {
+      if (!origin) return allowedOrigins[0] || DEFAULT_ALLOWED_ORIGINS[0];
+      return allowedOrigins.includes(origin) ? origin : "";
+    },
     credentials: true, // 支持 cookies
-  }),
-);
+  });
+
+  return corsMiddleware(c, next);
+});
 
 // 数据库和认证中间件
 app.use("*", dbMiddleware);
@@ -39,46 +70,39 @@ app.all("/api/auth/*", async (c) => {
   return response;
 });
 
-// 健康检查端点（无需认证）
-app.get("/health", (c) => {
-  return c.json({ status: "ok" });
-});
-
-app.get("/", (c) => {
-  return c.text("Hello Hono!");
-});
-
 // ==================== API 路由 ====================
-// 设备任务端点（公开端点，用于硬件调用，在requireAuth之前注册）
-// 注意：生产环境应添加设备密钥认证
-app.get("/api/devices/:deviceId/tasks", async (c) => {
-  try {
-    const db = c.get("db");
-    const deviceId = c.req.param("deviceId");
+if (ENABLE_PUBLIC_DEVICE_TASKS_ENDPOINT) {
+  // 设备任务端点（公开端点，用于硬件调用，在 requireAuth 之前注册）
+  // 先保留实现但默认关闭，后续接入设备密钥鉴权后再开启
+  app.get("/api/devices/:deviceId/tasks", async (c) => {
+    try {
+      const db = c.get("db");
+      const deviceId = c.req.param("deviceId");
 
-    if (!deviceId) {
+      if (!deviceId) {
+        return c.json(
+          {
+            success: false,
+            error: "设备ID不能为空",
+          },
+          400,
+        );
+      }
+
+      const deviceService = new DeviceService(db);
+      const tasks = await deviceService.getDeviceTasks(deviceId);
+
       return c.json(
-        {
-          success: false,
-          error: "设备ID不能为空",
-        },
-        400,
+        successResponse({
+          tasks,
+          lastUpdated: new Date().toISOString(),
+        }),
       );
+    } catch (error) {
+      return handleServiceError(c, error);
     }
-
-    const deviceService = new DeviceService(db);
-    const tasks = await deviceService.getDeviceTasks(deviceId);
-
-    return c.json(
-      successResponse({
-        tasks,
-        lastUpdated: new Date().toISOString(),
-      }),
-    );
-  } catch (error) {
-    return handleServiceError(c, error);
-  }
-});
+  });
+}
 
 // 需要认证的路由
 app.use("/api/*", requireAuth);

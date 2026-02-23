@@ -49,6 +49,134 @@ export interface ErrorResponse {
   details?: unknown;
 }
 
+const INTERNAL_ERROR_MESSAGE = "服务内部错误，请稍后重试";
+
+type MappedError = {
+  code: ErrorCode;
+  status: 400 | 401 | 403 | 404 | 409 | 429;
+  productionMessage: string;
+};
+
+function includesAny(message: string, patterns: string[]): boolean {
+  const normalized = message.toLowerCase();
+  return patterns.some((pattern) => normalized.includes(pattern));
+}
+
+function mapErrorMessage(message: string): MappedError | null {
+  if (
+    includesAny(message, [
+      "unauthorized",
+      "not authenticated",
+      "authentication",
+      "未授权",
+      "未登录",
+      "登录失效",
+    ])
+  ) {
+    return {
+      code: ErrorCode.UNAUTHORIZED,
+      status: 401,
+      productionMessage: "未授权，请重新登录",
+    };
+  }
+
+  if (
+    includesAny(message, [
+      "not found",
+      "does not exist",
+      "不存在",
+      "未找到",
+      "找不到",
+    ])
+  ) {
+    return {
+      code: ErrorCode.NOT_FOUND,
+      status: 404,
+      productionMessage: "资源不存在",
+    };
+  }
+
+  if (
+    includesAny(message, [
+      "permission",
+      "forbidden",
+      "not allowed",
+      "无权",
+      "权限",
+      "禁止访问",
+      "只有",
+    ])
+  ) {
+    return {
+      code: ErrorCode.FORBIDDEN,
+      status: 403,
+      productionMessage: "无权限执行该操作",
+    };
+  }
+
+  if (
+    includesAny(message, [
+      "duplicate",
+      "already exists",
+      "conflict",
+      "已存在",
+      "重复",
+      "冲突",
+    ])
+  ) {
+    return {
+      code: ErrorCode.CONFLICT,
+      status: 409,
+      productionMessage: "资源状态冲突，请检查后重试",
+    };
+  }
+
+  if (
+    includesAny(message, [
+      "too many requests",
+      "rate limit",
+      "请求过于频繁",
+      "尝试次数过多",
+    ])
+  ) {
+    return {
+      code: ErrorCode.TOO_MANY_REQUESTS,
+      status: 429,
+      productionMessage: "请求过于频繁，请稍后重试",
+    };
+  }
+
+  if (
+    includesAny(message, [
+      "invalid",
+      "validation",
+      "required",
+      "must",
+      "无效",
+      "不能为空",
+      "格式错误",
+      "参数错误",
+    ])
+  ) {
+    return {
+      code: ErrorCode.VALIDATION_ERROR,
+      status: 400,
+      productionMessage: "请求参数不合法",
+    };
+  }
+
+  return null;
+}
+
+function isProduction(c: Context): boolean {
+  const envFromContext = (c as { env?: { NODE_ENV?: string } }).env?.NODE_ENV;
+  const nodeEnv =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+      ?.NODE_ENV;
+  const env = envFromContext || nodeEnv;
+  return env === "production";
+}
+
 /**
  * 处理服务层错误
  *
@@ -64,6 +192,7 @@ export function handleServiceError(
   error: unknown,
   defaultMessage: string = "操作失败，请稍后重试"
 ) {
+  const prod = isProduction(c);
   console.error("Service error:", error);
 
   // Zod验证错误
@@ -82,12 +211,15 @@ export function handleServiceError(
   // 自定义应用错误
   if (error instanceof AppError) {
     const statusCode = error.statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503;
+    const isInternal = statusCode >= 500 || error.code === ErrorCode.INTERNAL_ERROR;
+    const safeMessage = prod && isInternal ? INTERNAL_ERROR_MESSAGE : error.message;
+
     return c.json(
       {
         success: false,
-        error: error.message,
+        error: safeMessage,
         code: error.code,
-        details: error.details,
+        details: !prod ? error.details : undefined,
       } as ErrorResponse,
       statusCode
     );
@@ -118,53 +250,24 @@ export function handleServiceError(
       );
     }
 
-    // 根据错误消息判断错误类型
-    if (error.message.includes("不存在") || error.message.includes("未找到")) {
+    // 根据错误消息映射常见业务错误，避免错误状态码全落到 500
+    const mapped = mapErrorMessage(error.message);
+    if (mapped) {
       return c.json(
         {
           success: false,
-          error: error.message,
-          code: ErrorCode.NOT_FOUND,
+          error: prod ? mapped.productionMessage : error.message,
+          code: mapped.code,
         } as ErrorResponse,
-        404
+        mapped.status
       );
     }
 
-    if (
-      error.message.includes("无权") ||
-      error.message.includes("权限") ||
-      error.message.includes("只有")
-    ) {
-      return c.json(
-        {
-          success: false,
-          error: error.message,
-          code: ErrorCode.FORBIDDEN,
-        } as ErrorResponse,
-        403
-      );
-    }
-
-    if (
-      error.message.includes("已存在") ||
-      error.message.includes("重复") ||
-      error.message.includes("冲突")
-    ) {
-      return c.json(
-        {
-          success: false,
-          error: error.message,
-          code: ErrorCode.CONFLICT,
-        } as ErrorResponse,
-        409
-      );
-    }
-
-    // 返回具体错误消息
+    // 未识别错误：开发环境保留原始错误，生产环境返回通用文案，避免泄露内部实现细节
     return c.json(
       {
         success: false,
-        error: error.message,
+        error: prod ? INTERNAL_ERROR_MESSAGE : error.message,
         code: ErrorCode.INTERNAL_ERROR,
       } as ErrorResponse,
       500

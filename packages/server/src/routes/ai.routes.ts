@@ -32,15 +32,6 @@ aiRoutes.post("/chat", async (c) => {
 
     const tzOffsetHeader = c.req.header("x-timezone-offset");
     const timezoneOffsetMinutes = tzOffsetHeader ? Number.parseInt(tzOffsetHeader, 10) : 0;
-    console.log(
-      "[ai.chat]",
-      JSON.stringify({
-        requestId,
-        userId,
-        hasMessage: !!message,
-        timezoneOffsetMinutes,
-      }),
-    );
     const tzOffset = Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0;
     const useMultiAgent =
       c.req.query("multi") === "true" || c.req.header("x-multi-agent") === "true";

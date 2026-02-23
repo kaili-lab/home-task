@@ -11,6 +11,7 @@
 > 以群组为核心的任务管理器——用自然语言描述需要做的事，多 Agent AI 系统自动处理，实体墨水屏 24 小时展示待办任务，无需打开手机。
 
 [English](./README.md)
+- Cloudflare 全自动部署文档：[`DEPLOY_CLOUDFLARE.md`](./DEPLOY_CLOUDFLARE.md)
 
 ---
 
@@ -132,9 +133,6 @@ AIHUBMIX_API_KEY=...
 AIHUBMIX_BASE_URL=https://aihubmix.com/v1
 AIHUBMIX_MODEL_NAME=deepseek-v3.2   # 可选，默认值
 
-# 可选
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
 ```
 
 **`packages/web/.env`**

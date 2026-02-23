@@ -49,9 +49,8 @@ export function useTaskList(filters?: TaskFilters) {
   const tasks: Task[] = data || [];
   const loading = isLoading;
 
-  const toggleTaskStatus = (taskId: number) => {
+  const toggleTaskStatus = (_taskId: number) => {
     // TODO: 实现任务状态切换的API调用
-    console.log("切换任务状态:", taskId);
   };
 
   return { tasks, loading, toggleTaskStatus, refetch };

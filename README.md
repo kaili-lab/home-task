@@ -11,6 +11,7 @@
 > Group task manager where you describe what needs doing in plain language — a multi-agent AI system handles the rest, and a shared e-ink display shows pending tasks 24/7 without opening an app.
 
 [中文文档](./README_CN.md)
+- Cloudflare end-to-end deployment guide: [`DEPLOY_CLOUDFLARE.md`](./DEPLOY_CLOUDFLARE.md)
 
 ---
 
@@ -132,9 +133,6 @@ AIHUBMIX_API_KEY=...
 AIHUBMIX_BASE_URL=https://aihubmix.com/v1
 AIHUBMIX_MODEL_NAME=deepseek-v3.2   # optional, this is the default
 
-# Optional
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
 ```
 
 **`packages/web/.env`**

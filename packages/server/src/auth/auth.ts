@@ -7,6 +7,42 @@ import { type Bindings } from "../types/bindings";
 import { getEnv } from "../utils/env";
 import { EmailService } from "../services/email.service";
 
+function parseOrigins(value?: string): string[] {
+  if (!value) return [];
+
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .flatMap((item) => {
+      try {
+        return [new URL(item).origin];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function buildTrustedOrigins(config: Bindings): string[] {
+  const origins = new Set<string>(["http://localhost:5173"]);
+
+  parseOrigins(config.FRONTEND_URL).forEach((origin) => origins.add(origin));
+  parseOrigins(config.BETTER_AUTH_URL).forEach((origin) => origins.add(origin));
+
+  return Array.from(origins);
+}
+
+function resolveFrontendUrl(config: Bindings): string {
+  const [frontendOrigin] = parseOrigins(config.FRONTEND_URL);
+  if (frontendOrigin) return frontendOrigin;
+
+  try {
+    return new URL(config.BETTER_AUTH_URL).origin;
+  } catch {
+    return "http://localhost:5173";
+  }
+}
+
 /**
  * 创建 Better Auth 实例
  *
@@ -18,6 +54,8 @@ import { EmailService } from "../services/email.service";
  */
 export const createAuth = (env: Bindings) => {
   const config = getEnv(env);
+  const trustedOrigins = buildTrustedOrigins(config);
+  const frontendUrl = resolveFrontendUrl(config);
 
   // 为 Better Auth 创建专用的 db 实例
   const db = createDb(config.DATABASE_URL);
@@ -59,13 +97,7 @@ export const createAuth = (env: Bindings) => {
     secret: config.BETTER_AUTH_SECRET,
 
     // 🆕 信任的前端源（允许跨域请求和邮件验证回调）
-    trustedOrigins: [
-      "http://localhost:5173", // 本地开发
-      // 生产环境：部署时在 Cloudflare 环境变量中添加前端域名
-      // 或者直接在这里硬编码你的前端域名（部署后取消注释）
-      // "https://yourdomain.com",
-      // "https://vocab-master.pages.dev",
-    ],
+    trustedOrigins,
 
     // 🔑 字段映射：将数据库字段映射到 better-auth 的标准字段
     user: {
@@ -108,7 +140,6 @@ export const createAuth = (env: Bindings) => {
     emailVerification: {
       sendVerificationEmail: async ({ user, url, token }, request) => {
         // 解析 URL，确保 callbackURL 指向完整的前端 URL，并添加 success 参数
-        const frontendUrl = config.FRONTEND_URL || "http://localhost:5173";
         const baseCallbackURL = `${frontendUrl}/verify-email`;
 
         // 解析传入的 URL
@@ -142,13 +173,6 @@ export const createAuth = (env: Bindings) => {
     // 🔑 用户名插件配置
     // 启用用户名登录功能
     plugins: [username()],
-
-    // Google OAuth 配置
-    google: {
-      enabled: !!config.GOOGLE_CLIENT_ID && !!config.GOOGLE_CLIENT_SECRET,
-      clientId: config.GOOGLE_CLIENT_ID || "",
-      clientSecret: config.GOOGLE_CLIENT_SECRET || "",
-    },
 
     // ⏱️ 会话配置
     session: {
