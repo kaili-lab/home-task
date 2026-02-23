@@ -233,6 +233,7 @@ URL 规则（工作流里有校验）：
 
 - 必须以 `https://` 开头
 - 不能有尾部 `/`
+- `BETTER_AUTH_URL` 与 `FRONTEND_URL` 不能为空（首次可先填 `workers.dev` / `pages.dev` 临时地址，后续再回填正式域名）
 
 ### 6.3 前端构建 Secrets
 
@@ -240,6 +241,7 @@ URL 规则（工作流里有校验）：
 - `VITE_AUTH_BASE_URL`
 
 通常二者都填 API 完整地址，如：`https://api.yourdomain.com`。
+也可以先留空：工作流会跳过 URL 校验，前端按同域模式构建（适合首次尚未确定 API 域名时）。
 
 ---
 
@@ -394,6 +396,22 @@ git push origin main
 - 改 Secrets 不会自动触发部署。
 - 需要重新 `push main` 或手动 `Run workflow`。
 
+### 10.6 `ERR_PNPM_NOTHING_TO_DEPLOY`
+
+- 触发原因：把 `pnpm -C packages/server deploy` 当成脚本执行，但 pnpm 会优先匹配内置 `deploy` 子命令。
+- 正确做法：必须显式执行脚本 `pnpm -C packages/server run deploy`。
+
+### 10.7 `Pages now has wrangler.json support` 警告
+
+- 该警告通常是 `wrangler pages deploy` 在错误目录发现了不适配 Pages 的 `wrangler.json(c)`。
+- 当前工作流已通过 `wrangler --cwd ../.. pages deploy ...` 避开这个问题。
+- 这是警告，不是失败主因；真正失败通常在后面的权限或项目名错误。
+
+### 10.8 日志里还是旧命令/旧逻辑
+
+- 如果日志还出现 `--project-name \"$CLOUDFLARE_PAGES_PROJECT\"` 等旧写法，说明跑的不是最新 workflow。
+- 处理：确认已把最新 `.github/workflows/deploy-cloudflare.yml` 提交到触发分支（通常是 `main`）。
+
 ---
 
 ## 11. 回滚、暂停、停费
@@ -428,3 +446,13 @@ git push origin main
 - Wrangler Secret Commands: <https://developers.cloudflare.com/workers/wrangler/commands/#secret>
 - Hono on Workers: <https://hono.dev/docs/getting-started/cloudflare-workers>
 - LangChain on Cloudflare: <https://js.langchain.com/docs/integrations/platforms/cloudflare/>
+
+---
+
+## 13. 本次实操问题总结（可直接对照）
+
+- `VITE_API_BASE_URL 必须以 https:// 开头`：首次可留空，先跑通后再回填正式 API 域名。
+- `BETTER_AUTH_URL 必须以 https:// 开头`：不能为空，首次先填 Worker 临时域名。
+- `ERR_PNPM_NOTHING_TO_DEPLOY`：把 `deploy` 当成 pnpm 子命令了，改为 `pnpm ... run deploy`。
+- `缺少必需 Secret: CLOUDFLARE_PAGES_PROJECT`：现已改为可选；仅在账户下多个 Pages 项目时才需要显式指定。
+- `Authentication error code: 10000`：Pages Token 缺 `Account -> Cloudflare Pages -> Edit` 权限，或 Token 与 Account ID 不匹配。
