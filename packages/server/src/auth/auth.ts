@@ -121,7 +121,7 @@ export const createAuth = (env: Bindings) => {
     emailAndPassword: {
       enabled: true, // 启用邮箱密码登录（用于注册时提供邮箱）
       requireEmailVerification: true, // 启用邮箱验证
-      minPasswordLength: 6,
+      minPasswordLength: 8,
       maxPasswordLength: 20,
       // 🔑 密码重置邮件发送配置
       sendResetPassword: async (

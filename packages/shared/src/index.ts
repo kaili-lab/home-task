@@ -23,7 +23,13 @@ export type {
 } from "./api/tasks";
 
 // 用户相关类型
-export type { UpdateUserInput, UserInfo, UserGroup } from "./api/users";
+export type {
+  UpdateUserInput,
+  ChangePasswordInput,
+  ChangePasswordResult,
+  UserInfo,
+  UserGroup,
+} from "./api/users";
 
 // 群组相关类型
 export type { CreateGroupInput, UpdateGroupInput, GroupInfo, GroupDetail } from "./api/groups";

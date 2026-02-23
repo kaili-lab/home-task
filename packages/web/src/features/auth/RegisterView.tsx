@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 20;
+
 export function RegisterView() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -20,8 +23,17 @@ export function RegisterView() {
   const [needsVerification, setNeedsVerification] = useState(false);
 
   const passwordMatch = password === confirmPassword;
+  const passwordLengthValid =
+    password.length >= PASSWORD_MIN_LENGTH && password.length <= PASSWORD_MAX_LENGTH;
   const canSubmit =
-    email && username && nickname && password && confirmPassword && passwordMatch && agreedToTerms;
+    email &&
+    username &&
+    nickname &&
+    password &&
+    confirmPassword &&
+    passwordMatch &&
+    passwordLengthValid &&
+    agreedToTerms;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +93,7 @@ export function RegisterView() {
             <span className="text-4xl">🏠</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-800">创建账号</h1>
-          <p className="text-gray-500 text-sm mt-1">加入家庭助手，开始管理你的家庭任务</p>
+          <p className="text-gray-500 text-sm mt-1">加入任务助手，开始管理你的家庭个人和群组任务</p>
         </div>
 
         {/* Register Form */}
@@ -151,13 +163,13 @@ export function RegisterView() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少8位字符"
+              placeholder="8-20位字符"
               className="mt-1"
               required
               disabled={needsVerification}
             />
-            {password && password.length < 8 && (
-              <p className="text-xs text-red-500 mt-1">密码至少需要8位字符</p>
+            {password && !passwordLengthValid && (
+              <p className="text-xs text-red-500 mt-1">密码长度需要在 8 到 20 位之间</p>
             )}
           </div>
 
