@@ -180,7 +180,7 @@ jobs:
           done
 
       - name: Deploy worker
-        run: pnpm -C packages/server deploy
+        run: pnpm -C packages/server run deploy
 
   deploy_web:
     runs-on: ubuntu-latest
