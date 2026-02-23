@@ -213,7 +213,7 @@ jobs:
           set -euo pipefail
           missing=()
 
-          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_PAGES_PROJECT; do
+          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN; do
             if [ -z "${!key:-}" ]; then
               missing+=("$key")
             fi
@@ -224,6 +224,41 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve pages project name
+        run: |
+          set -euo pipefail
+
+          if [ -n "${CLOUDFLARE_PAGES_PROJECT:-}" ]; then
+            echo "PAGES_PROJECT=$CLOUDFLARE_PAGES_PROJECT" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          response="$(curl -fsS \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects")"
+
+          if [ "$(echo "$response" | jq -r '.success')" != "true" ]; then
+            echo "查询 Pages 项目失败，请检查 CLOUDFLARE_API_TOKEN_PAGES 权限" >&2
+            echo "$response" >&2
+            exit 1
+          fi
+
+          mapfile -t names < <(echo "$response" | jq -r '.result[]?.name')
+
+          if [ "${#names[@]}" -eq 0 ]; then
+            echo "当前账户没有 Pages 项目，请先执行 wrangler pages project create" >&2
+            exit 1
+          fi
+
+          if [ "${#names[@]}" -gt 1 ]; then
+            echo "检测到多个 Pages 项目，请设置 Secret: CLOUDFLARE_PAGES_PROJECT" >&2
+            printf "候选项目: %s\n" "${names[@]}" >&2
+            exit 1
+          fi
+
+          echo "PAGES_PROJECT=${names[0]}" >> "$GITHUB_ENV"
+
       - name: Download web artifact
         uses: actions/download-artifact@v4
         with:
@@ -231,4 +266,4 @@ jobs:
           path: packages/web/dist
 
       - name: Deploy pages
-        run: pnpm -C packages/server exec wrangler pages deploy ../web/dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main
+        run: pnpm -C packages/server exec wrangler --cwd ../.. pages deploy packages/web/dist --project-name "$PAGES_PROJECT" --branch main
