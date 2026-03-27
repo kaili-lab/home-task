@@ -1,5 +1,11 @@
-import { apiGet, apiPatch } from "@/lib/api-client";
-import type { UserInfo, UserGroup, UpdateUserInput } from "shared";
+import { apiGet, apiPatch, apiPost } from "@/lib/api-client";
+import type {
+  UserInfo,
+  UserGroup,
+  UpdateUserInput,
+  ChangePasswordInput,
+  ChangePasswordResult,
+} from "shared";
 import { formatLocalDateTime } from "@/utils/date";
 
 function mapUserInfoTimes(user: UserInfo): UserInfo {
@@ -32,6 +38,14 @@ export async function getCurrentUser() {
 export async function updateCurrentUser(data: UpdateUserInput) {
   const response = await apiPatch<UserInfo>("/api/users/me", data);
   return mapUserInfoTimes(response.data);
+}
+
+/**
+ * 修改当前用户密码
+ */
+export async function changeCurrentUserPassword(data: ChangePasswordInput) {
+  const response = await apiPost<ChangePasswordResult>("/api/users/me/password", data);
+  return response.data;
 }
 
 /**

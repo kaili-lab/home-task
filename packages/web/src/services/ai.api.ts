@@ -2,6 +2,8 @@ import { apiGet, apiPost } from "@/lib/api-client";
 import type { AIChatInput, AIChatResponse, MessageResponse, TaskInfo } from "shared";
 import { formatLocalDateTime } from "@/utils/date";
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/+$/, "");
+
 function mapMessageTimes(message: MessageResponse): MessageResponse {
   // 在接口层统一格式化时间，避免聊天列表展示不一致
   const createdAt = formatLocalDateTime(message.createdAt) ?? message.createdAt;
@@ -67,9 +69,8 @@ export async function chat(
   }
 
   if (stream) {
-    // 流式返回：使用EventSource
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    const url = `${API_BASE_URL}/api/ai/chat?stream=true`;
+    // 流式返回默认走同域，跨域场景才拼接绝对地址
+    const url = API_BASE_URL ? `${API_BASE_URL}/api/ai/chat?stream=true` : "/api/ai/chat?stream=true";
 
     // 注意：EventSource只支持GET请求，但我们需要POST
     // 所以需要使用fetch的stream模式

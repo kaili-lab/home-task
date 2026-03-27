@@ -917,18 +917,9 @@ ${groupsList}
     options?: { skipSemanticConflictCheck?: boolean },
   ): Promise<ToolResult> {
     /*
-    把工具调用集中在一个函数中，便于统一记录日志与收集结果，
-    也能避免对话循环里混入大量业务分支，降低维护成本。
+    把工具调用集中在一个函数中，避免对话循环里混入大量业务分支，
+    让业务规则保持在确定性代码路径中，降低维护复杂度。
     */
-    console.log(
-      "[ai.tool.start]",
-      JSON.stringify({
-        requestId: this.requestId,
-        userId,
-        toolName,
-        toolArgs,
-      }),
-    );
     const taskService = new TaskService(this.db);
     switch (toolName) {
       case "create_task": {
@@ -1059,15 +1050,6 @@ ${groupsList}
           assignedToIds: [userId],
         });
 
-        console.log(
-          "[ai.tool.success]",
-          JSON.stringify({
-            requestId: this.requestId,
-            userId,
-            toolName,
-            taskId: task.id,
-          }),
-        );
         const timeInfo = task.startTime
           ? `，时间${task.startTime}-${task.endTime}`
           : `（${this.formatTimeSegmentLabel(task.timeSegment)}）`;
@@ -1101,15 +1083,6 @@ ${groupsList}
           return { status: "success", message: "没有找到符合条件的任务。" };
         }
 
-        console.log(
-          "[ai.tool.success]",
-          JSON.stringify({
-            requestId: this.requestId,
-            userId,
-            toolName,
-            resultCount: result.tasks.length,
-          }),
-        );
         const message = result.tasks
           .map(
             (t) =>
@@ -1146,15 +1119,6 @@ ${groupsList}
           priority: priority as "high" | "medium" | "low" | undefined,
         });
 
-        console.log(
-          "[ai.tool.success]",
-          JSON.stringify({
-            requestId: this.requestId,
-            userId,
-            toolName,
-            taskId: task.id,
-          }),
-        );
         const timeInfo = task.startTime
           ? `，时间${task.startTime}-${task.endTime}`
           : `（${this.formatTimeSegmentLabel(task.timeSegment)}）`;
@@ -1170,15 +1134,6 @@ ${groupsList}
       case "complete_task": {
         const { taskId } = toolArgs as { taskId: number };
         const task = await taskService.updateTaskStatus(taskId, userId, "completed");
-        console.log(
-          "[ai.tool.success]",
-          JSON.stringify({
-            requestId: this.requestId,
-            userId,
-            toolName,
-            taskId: task.id,
-          }),
-        );
         return {
           status: "success",
           message: `任务 "${task.title}" 已标记为完成。`,
@@ -1191,15 +1146,6 @@ ${groupsList}
       case "delete_task": {
         const { taskId } = toolArgs as { taskId: number };
         await taskService.deleteTask(taskId, userId);
-        console.log(
-          "[ai.tool.success]",
-          JSON.stringify({
-            requestId: this.requestId,
-            userId,
-            toolName,
-            taskId,
-          }),
-        );
         return {
           status: "success",
           message: "任务已删除。",
@@ -1208,14 +1154,6 @@ ${groupsList}
       }
 
       default:
-        console.log(
-          "[ai.tool.unknown]",
-          JSON.stringify({
-            requestId: this.requestId,
-            userId,
-            toolName,
-          }),
-        );
         return { status: "error", message: `未知工具：${toolName}` };
     }
   }
@@ -1244,17 +1182,6 @@ ${groupsList}
     const inferredIntent = this.inferTaskIntent(message);
     // 累积最后一个有意义的 ToolResult，用于最终回复时提取 payload
     let lastSignificantResult: ToolResult | null = null;
-    console.log(
-      "[ai.chat.start]",
-      JSON.stringify({
-        requestId: this.requestId,
-        userId,
-        timezoneOffsetMinutes: this.timezoneOffsetMinutes,
-        historyCount: chatHistory.length,
-        messageLength: message.length,
-        message,
-      }),
-    );
 
     // 规则兜底：用户明确说"今天上午/下午"等但当前已过该时间段，直接提醒确认
     if (message.includes("今天") && this.hasTimeSegmentHint(message)) {
@@ -1285,20 +1212,6 @@ ${groupsList}
         tools: TOOL_DEFINITIONS,
         tool_choice: toolChoice,
       });
-      console.log(
-        "[ai.llm.response]",
-        JSON.stringify({
-          requestId: this.requestId,
-          userId,
-          iteration: i + 1,
-          toolChoice,
-          toolCalls: response.tool_calls?.map((call) => ({
-            name: call.name,
-            id: call.id,
-          })),
-          hasToolCalls: !!response.tool_calls && response.tool_calls.length > 0,
-        }),
-      );
       messages.push(response);
 
       // 无 Tool Call -> 最终文本回复，loop 结束
@@ -1325,15 +1238,6 @@ ${groupsList}
           task: lastSignificantResult?.task,
           conflictingTasks: lastSignificantResult?.conflictingTasks,
         });
-        console.log(
-          "[ai.chat.end]",
-          JSON.stringify({
-            requestId: this.requestId,
-            userId,
-            type,
-            hasTask: !!lastSignificantResult?.task,
-          }),
-        );
 
         return {
           content,
@@ -1357,15 +1261,6 @@ ${groupsList}
             { skipSemanticConflictCheck },
           );
         } catch (error) {
-          console.log(
-            "[ai.tool.error]",
-            JSON.stringify({
-              requestId: this.requestId,
-              userId,
-              toolName: toolCall.name,
-              error: error instanceof Error ? error.message : String(error),
-            }),
-          );
           throw error;
         }
 
@@ -1399,13 +1294,6 @@ ${groupsList}
     const fallback = "抱歉，处理超时，请重新尝试。";
     await this.saveMessage(userId, "user", message);
     await this.saveMessage(userId, "assistant", fallback);
-    console.log(
-      "[ai.chat.timeout]",
-      JSON.stringify({
-        requestId: this.requestId,
-        userId,
-      }),
-    );
     return { content: fallback, type: "text" };
   }
 }

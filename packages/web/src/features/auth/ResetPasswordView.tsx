@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PageLoader } from "@/components/ui/page-loader";
 
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 20;
+
 export function ResetPasswordView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -27,7 +30,9 @@ export function ResetPasswordView() {
   }, [searchParams, navigate]);
 
   const passwordMatch = password === confirmPassword;
-  const canSubmit = password && confirmPassword && passwordMatch && token;
+  const passwordLengthValid =
+    password.length >= PASSWORD_MIN_LENGTH && password.length <= PASSWORD_MAX_LENGTH;
+  const canSubmit = password && confirmPassword && passwordMatch && passwordLengthValid && token;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,13 +101,13 @@ export function ResetPasswordView() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少6位字符"
+              placeholder="8-20位字符"
               className="mt-1"
               required
               autoFocus
             />
-            {password && password.length < 6 && (
-              <p className="text-xs text-red-500 mt-1">密码至少需要6位字符</p>
+            {password && !passwordLengthValid && (
+              <p className="text-xs text-red-500 mt-1">密码长度需要在 8 到 20 位之间</p>
             )}
           </div>
 

@@ -85,7 +85,7 @@ export function LoginView() {
             <span className="text-4xl">🏠</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-800">欢迎回来</h1>
-          <p className="text-gray-500 text-sm mt-1">登录你的家庭助手账号</p>
+          <p className="text-gray-500 text-sm mt-1">登录你的任务助手账号</p>
         </div>
 
         {/* Login Form */}

@@ -78,7 +78,6 @@ export function AIView() {
 
   const handleVoiceInput = () => {
     // TODO: 实现语音输入
-    console.log("语音输入功能开发中...");
   };
 
   const timeSegmentDescriptions = [

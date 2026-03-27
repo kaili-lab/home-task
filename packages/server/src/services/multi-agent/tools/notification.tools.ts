@@ -88,8 +88,6 @@ export const scheduleReminderTool = tool(
       channel: "console",
     });
 
-    console.log("[notification.reminder]", JSON.stringify({ userId, remindAt, content }));
-
     return toJsonResult({
       status: "success",
       message: `提醒已安排：${content}`,

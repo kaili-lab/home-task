@@ -1,5 +1,7 @@
 # 后端 API 基础地址
-VITE_API_BASE_URL=http://localhost:3000
+# 同域部署（推荐）可留空；跨域部署时填写完整地址，例如 https://api.example.com
+VITE_API_BASE_URL=
 
 # Better Auth 后端地址（通常与 API 地址相同）
-VITE_AUTH_BASE_URL=http://localhost:3000
+# 同域部署可留空；跨域部署时填写完整地址
+VITE_AUTH_BASE_URL=

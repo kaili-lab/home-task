@@ -1,9 +1,10 @@
 import type { ApiResponse, ApiSuccessResponse, ApiErrorResponse } from "shared";
 
 /**
- * API基础URL，从环境变量读取
+ * API 基础地址。
+ * 默认留空表示同域部署（前后端同一域名/端口），这样避免浏览器把 localhost 解析为用户本机。
  */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/+$/, "");
 
 /**
  * HTTP请求选项
@@ -45,7 +46,7 @@ export async function apiRequest<T>(
   const { skipErrorHandling = false, ...fetchOptions } = options;
 
   // 构建完整URL
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
 
   // 设置默认请求头
   const headers = new Headers(fetchOptions.headers);

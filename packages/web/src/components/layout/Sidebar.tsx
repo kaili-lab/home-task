@@ -47,7 +47,7 @@ export function Sidebar({ onCreateGroup }: SidebarProps) {
         <div className="flex items-center gap-3">
           <span className="text-2xl">🏠</span>
           <div>
-            <h1 className="font-bold text-gray-800">家庭助手</h1>
+            <h1 className="font-bold text-gray-800">任务助手</h1>
             <span className="text-xs text-gray-400">v2.1</span>
           </div>
         </div>

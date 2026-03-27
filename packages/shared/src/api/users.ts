@@ -7,6 +7,19 @@ export interface UpdateUserInput {
   defaultGroupId?: number | null;
 }
 
+// 修改密码输入类型
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+}
+
+// 修改密码结果类型
+export interface ChangePasswordResult {
+  status: boolean;
+  token: string | null;
+}
+
 // 用户信息类型
 export interface UserInfo {
   id: number;

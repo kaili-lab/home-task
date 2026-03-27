@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "server",
+  "name": "home-task-api",
   "dev": {
     "port": 3000,
   },

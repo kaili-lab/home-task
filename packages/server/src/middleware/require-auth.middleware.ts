@@ -4,7 +4,6 @@ import type { AppVariables } from "../types/variables";
 
 const PUBLIC_PATHS = [
   "/api/auth", // Better Auth 所有路由
-  "/health", // 健康检查
   "/api/examples/public-template", // 示例：公共路由模板
 ];
 
