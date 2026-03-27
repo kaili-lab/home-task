@@ -19,13 +19,13 @@ const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
 // ==================== 全局中间件 ====================
 app.use("*", logger());
-app.use(
-  "*",
-  cors({
-    origin: ["http://localhost:5173"],
+app.use("*", (c, next) => {
+  const allowedOrigin = c.env.FRONTEND_URL || "http://localhost:5173";
+  return cors({
+    origin: allowedOrigin,
     credentials: true, // 支持 cookies
-  }),
-);
+  })(c, next);
+});
 
 // 数据库和认证中间件
 app.use("*", dbMiddleware);
