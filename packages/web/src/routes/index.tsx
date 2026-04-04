@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -16,6 +17,10 @@ import { ProfileView } from "@/features/profile/ProfileView";
 import { useApp } from "@/contexts/AppContext";
 import { PageLoader } from "@/components/ui/page-loader";
 
+const LandingPage = lazy(() =>
+  import("@/features/landing/LandingPage").then((m) => ({ default: m.LandingPage }))
+);
+
 /**
  * 根路径重定向组件
  * 根据认证状态重定向到相应页面
@@ -27,7 +32,15 @@ function RootRedirect() {
     return <PageLoader />;
   }
 
-  return <Navigate to={isAuthenticated ? "/today" : "/login"} replace />;
+  if (isAuthenticated) {
+    return <Navigate to="/today" replace />;
+  }
+
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <LandingPage />
+    </Suspense>
+  );
 }
 
 /**
