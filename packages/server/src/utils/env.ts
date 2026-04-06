@@ -37,3 +37,13 @@ export const getEnv = (env: Bindings): Bindings => {
 
   return env;
 };
+
+/**
+ * 统一解析多 Agent 开关
+ *
+ * 仅当 ENABLE_MULTI_AGENT 严格等于 "true" 时启用多 Agent，
+ * 其余值（包括未配置）均视为关闭，避免环境配置歧义。
+ */
+export const isMultiAgentEnabled = (env: Bindings): boolean => {
+  return env.ENABLE_MULTI_AGENT === "true";
+};

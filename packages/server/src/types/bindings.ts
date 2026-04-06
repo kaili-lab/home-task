@@ -23,4 +23,5 @@ export type Bindings = {
   // 服务器配置（可选）
   PORT?: string;
   NODE_ENV?: string;
+  ENABLE_MULTI_AGENT?: string;
 };

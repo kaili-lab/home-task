@@ -133,12 +133,20 @@ AIHUBMIX_API_KEY=...
 AIHUBMIX_BASE_URL=https://aihubmix.com/v1
 AIHUBMIX_MODEL_NAME=deepseek-v3.2   # 可选，默认值
 
+# AI 路由开关（严格等于 true 才启用多 Agent）
+ENABLE_MULTI_AGENT=true
+
 ```
 
 **`packages/web/.env`**
 ```env
 VITE_API_BASE_URL=http://localhost:3000
 ```
+
+`ENABLE_MULTI_AGENT` 语义：
+
+- `true`：`POST /api/ai/chat` 走 LangGraph 多 Agent（`MultiAgentService`）
+- `false`、未配置、空字符串、其他值：默认走单 Agent（`AIService`）
 
 ### 启动
 

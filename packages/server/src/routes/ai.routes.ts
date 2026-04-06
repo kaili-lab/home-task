@@ -8,6 +8,7 @@ import { eq, desc } from "drizzle-orm";
 import { getUserId, successResponse } from "../utils/route-helpers";
 import { handleServiceError } from "../utils/error-handler";
 import { toUtcIso } from "../utils/time";
+import { isMultiAgentEnabled } from "../utils/env";
 
 const aiRoutes = new Hono<{
   Bindings: Bindings;
@@ -33,10 +34,9 @@ aiRoutes.post("/chat", async (c) => {
     const tzOffsetHeader = c.req.header("x-timezone-offset");
     const timezoneOffsetMinutes = tzOffsetHeader ? Number.parseInt(tzOffsetHeader, 10) : 0;
     const tzOffset = Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0;
-    const useMultiAgent =
-      c.req.query("multi") === "true" || c.req.header("x-multi-agent") === "true";
+    const useMultiAgent = isMultiAgentEnabled(c.env);
     if (useMultiAgent) {
-      // 通过显式开关切换多 Agent，避免对现有逻辑产生破坏
+      // 通过环境变量切换多 Agent，避免请求级参数绕过部署策略
       const multiService = new MultiAgentService(db, c.env, tzOffset);
       const result = await multiService.chat(userId, message.trim());
       return c.json(successResponse(result));

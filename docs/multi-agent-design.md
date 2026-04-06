@@ -1,12 +1,18 @@
 # 多 Agent 系统设计文档
 
+## 文档状态说明（2026-04-06）
+
+- 已落地：`packages/server/src/services/multi-agent/` 目录、4 个子 Agent、Supervisor 编排、`MultiAgentService`、`/api/ai/chat` 多 Agent 切换、`reminders` 表与 relations、单元/集成/eval 测试文件。
+- 部分落地：天气仍使用 Mock 数据；通知当前仅写入 `reminders` 并支持查询/取消，未接入真实短信/邮件发送；状态持久化仍使用 `MemorySaver`，未切到持久化 checkpointer。
+- 说明：本文最初是设计稿，但现在不能再按“纯待实施方案”理解。文中涉及“计划迁移到传统 Node.js 部署”等表述，属于当时设计背景；按当前仓库状态，多 Agent 代码已经落地，服务端仍保留现有运行方式与路由形态。
+
 ## 1. 背景与目标
 
 ### 1.1 背景
 
 当前项目的 AI 功能由单 Agent 实现（`ai.service.ts`，约 1400 行），所有逻辑集中在一个文件：LLM 调用、Tool 执行、时间校验、冲突检测、意图推断、对话历史管理。随着功能扩展（日历、天气、通知提醒），单 Agent 模式已到达复杂度天花板。
 
-同时，项目计划从 Cloudflare Workers（Serverless）迁移到传统 Node.js 部署，解除了 bundle 体积和运行时兼容性的限制，可以使用 LangGraph 的完整能力。
+本文最初的设计背景，是计划从 Cloudflare Workers（Serverless）迁移到传统 Node.js 部署，以解除 bundle 体积和运行时兼容性的限制，从而使用 LangGraph 的完整能力。按当前仓库状态，多 Agent 模块已经先行落地，因此这里应理解为设计动因，而不是仍未开始的前置条件。
 
 ### 1.2 目标
 
@@ -55,9 +61,9 @@
 | Tool Schema | `zod` + `@langchain/core/tools` | 类型安全的 Tool 定义 |
 | LLM | `@langchain/openai` (ChatOpenAI) | 支持 OpenAI / AIHubMix 中转 |
 | 状态持久化 | `MemorySaver`（开发阶段） | 后续可切 PostgresSaver |
-| 部署 | 传统 Node.js | 不再受 Cloudflare Workers 限制 |
+| 部署 | 以当前仓库实际运行方式为准 | 多 Agent 已落地；文档中的“迁移到传统 Node.js”是设计背景，不表示 Workers 相关路径已完全移除 |
 
-### 2.3 目录结构
+### 2.3 目录结构 [已落地]
 
 ```
 packages/server/src/
@@ -99,6 +105,8 @@ packages/server/src/
 
 **职责**：理解用户意图，分发给对应子 Agent，汇总多个 Agent 的结果返回用户。
 
+**当前状态**：已落地。
+
 **框架**：`createSupervisor`（`@langchain/langgraph-supervisor`）
 
 **Prompt 设计原则**：
@@ -132,6 +140,8 @@ packages/server/src/
 
 **职责**：处理任务的全生命周期管理。
 
+**当前状态**：已落地。
+
 **框架**：`createReactAgent`
 
 **Prompt 设计原则**：
@@ -162,6 +172,8 @@ packages/server/src/
 
 **职责**：提供时间维度的全局视图，与 Task Agent 的区别是"看全局"而非"操作单个"。
 
+**当前状态**：已落地。
+
 **框架**：`createReactAgent`
 
 **Tools**：
@@ -176,6 +188,8 @@ packages/server/src/
 ### 3.4 Weather Agent
 
 **职责**：查询天气信息。最简 Agent，独立外部数据源。
+
+**当前状态**：已落地，但当前仍使用 Mock 天气数据。
 
 **框架**：`createReactAgent`
 
@@ -206,6 +220,8 @@ packages/server/src/
 ### 3.5 Notification Agent
 
 **职责**：跨 Agent 信息聚合，决定何时、如何通知用户。
+
+**当前状态**：部分落地。当前已支持提醒记录的创建、查询、取消与提醒文案生成，但尚未接入真实短信/邮件发送链路。
 
 **框架**：`createReactAgent`
 
@@ -522,7 +538,7 @@ packages/server/src/__tests__/multi-agent/
 
 ## 7. 实施计划
 
-### Phase 1: 基础设施搭建
+### Phase 1: 基础设施搭建 [已落地]
 
 - 安装依赖：`@langchain/langgraph`、`@langchain/langgraph-supervisor`、`zod`
 - 创建 `multi-agent/` 目录结构
@@ -531,7 +547,7 @@ packages/server/src/__tests__/multi-agent/
 - 创建 `types.ts`（ToolResult 等共享类型）
 - 编写 `time.helpers.test.ts` 和 `conflict.helpers.test.ts` 单元测试
 
-### Phase 2: Task Agent
+### Phase 2: Task Agent [已落地]
 
 - 用 zod 定义 5 个 Tool（create_task、query_tasks、modify_task、finish_task、remove_task）
 - 实现 Tool 内部逻辑（复用 TaskService）
@@ -539,21 +555,21 @@ packages/server/src/__tests__/multi-agent/
 - 用 `createReactAgent` 创建 Task Agent
 - 编写 `task.tools.test.ts`（Node 级）和 `task.agent.test.ts`（Graph 级）
 
-### Phase 3: Weather Agent
+### Phase 3: Weather Agent [已落地，当前仍为 Mock 数据]
 
 - 用 zod 定义 `get_weather` Tool
 - 实现 Mock 天气数据（预定义一组天气数据）
 - 用 `createReactAgent` 创建 Weather Agent
 - 编写 `weather.tools.test.ts` 和 `weather.agent.test.ts`
 
-### Phase 4: Calendar Agent
+### Phase 4: Calendar Agent [已落地]
 
 - 用 zod 定义 `get_day_schedule` 和 `find_free_slots` Tool
 - 实现聚合查询逻辑（复用 TaskService.getTasks）
 - 用 `createReactAgent` 创建 Calendar Agent
 - 编写 `calendar.tools.test.ts` 和 `calendar.agent.test.ts`
 
-### Phase 5: Notification Agent
+### Phase 5: Notification Agent [部分落地]
 
 - 创建 `reminders` 表（Drizzle schema + migration）
 - 用 zod 定义 3 个 Tool（schedule_reminder、list_reminders、cancel_reminder）
@@ -561,13 +577,13 @@ packages/server/src/__tests__/multi-agent/
 - 用 `createReactAgent` 创建 Notification Agent
 - 编写 `notification.tools.test.ts` 和 `notification.agent.test.ts`
 
-### Phase 6: Supervisor 编排
+### Phase 6: Supervisor 编排 [已落地]
 
 - 用 `createSupervisor` 串联 4 个子 Agent
 - 实现 `MultiAgentService.chat()` 对外入口
 - 编写 `supervisor.test.ts`（路由测试 + 跨 Agent 协作测试）
 
-### Phase 7: 接入与评测
+### Phase 7: 接入与评测 [部分落地]
 
 - 创建新的 API 路由或在现有路由上添加切换逻辑
 - 编写 `multi-agent.eval.test.ts`（真实 LLM 评测）
@@ -575,14 +591,14 @@ packages/server/src/__tests__/multi-agent/
 
 ---
 
-## 8. 新增依赖清单
+## 8. 新增依赖清单 [已安装]
 
 ```json
 {
   "dependencies": {
-    "@langchain/langgraph": "latest",
-    "@langchain/langgraph-supervisor": "latest",
-    "zod": "^3.x"
+    "@langchain/langgraph": "^1.1.4",
+    "@langchain/langgraph-supervisor": "^1.0.1",
+    "zod": "^4.3.5"
   }
 }
 ```
@@ -591,7 +607,7 @@ packages/server/src/__tests__/multi-agent/
 
 ---
 
-## 9. 数据库变更
+## 9. 数据库变更 [已落地]
 
 ### 新增 reminders 表
 
