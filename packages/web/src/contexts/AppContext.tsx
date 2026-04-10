@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode, useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { getGroups } from "@/services/groups.api";
+import { useAuth } from "@/hooks/useAuth";
 import type { Group } from "@/types";
 import type { UserGroup } from "shared";
 
@@ -39,14 +40,24 @@ export function AppProvider({ children }: AppProviderProps) {
   const createTaskModal = useModal();
   const createGroupModal = useModal();
   const [groups, setGroups] = useState<Group[]>([]);
+  const { isAuthenticated, isLoading } = useAuth();
 
   // 从API获取群组列表
   useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      setGroups([]);
+      return;
+    }
+
+    let mounted = true;
     const fetchGroups = async () => {
       try {
         const userGroups = await getGroups();
         const convertedGroups = userGroups.map(userGroupToGroup);
-        setGroups(convertedGroups);
+        if (mounted) {
+          setGroups(convertedGroups);
+        }
       } catch (error) {
         console.error("获取群组列表失败:", error);
         // 如果获取失败，保持空数组
@@ -54,7 +65,11 @@ export function AppProvider({ children }: AppProviderProps) {
     };
 
     fetchGroups();
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthenticated, isLoading]);
 
   return (
     <AppContext.Provider
