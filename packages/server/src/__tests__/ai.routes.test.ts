@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Hono } from "hono";
 import aiRoutes from "../routes/ai.routes";
 import type { Bindings } from "../types/bindings";
-import { AIService } from "../services/ai.service";
+import { AIService } from "../services/ai";
 import { MultiAgentService } from "../services/multi-agent";
 
 const { mockAIChat, mockMultiChat } = vi.hoisted(() => ({
@@ -10,7 +10,7 @@ const { mockAIChat, mockMultiChat } = vi.hoisted(() => ({
   mockMultiChat: vi.fn(),
 }));
 
-vi.mock("../services/ai.service", () => ({
+vi.mock("../services/ai", () => ({
   AIService: vi.fn(() => ({
     chat: mockAIChat,
   })),

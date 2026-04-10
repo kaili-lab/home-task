@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AuthenticatedVariables } from "../types/variables";
 import type { Bindings } from "../types/bindings";
-import { AIService } from "../services/ai.service";
+import { AIService } from "../services/ai";
 import { MultiAgentService } from "../services/multi-agent";
 import { messages as messagesTable } from "../db/schema";
 import { eq, desc } from "drizzle-orm";

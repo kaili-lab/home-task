@@ -75,15 +75,17 @@ Layer 4: History
 
 ---
 
-## 5. Tool 定义（摘要）
+## 5. Tool 定义
 
-| Tool          | 用途     | 关键参数                                                                              |
-| ------------- | -------- | ------------------------------------------------------------------------------------- |
-| create_task   | 创建任务 | title, dueDate, startTime?, endTime?, timeSegment?, priority?, groupId?, description? |
-| query_tasks   | 查询任务 | status?, dueDate?, dueDateFrom?, dueDateTo?, priority?                                |
-| update_task   | 修改任务 | taskId, title?, dueDate?, startTime?, endTime?, timeSegment?, priority?, description? |
-| delete_task   | 删除任务 | taskId                                                                                |
-| complete_task | 完成任务 | taskId                                                                                |
+> description 写法原则见 `agent-design-principle.md`。
+
+| Tool            | description                                                                                             | 关键参数                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `create_task`   | 当用户想新增提醒或待办时，创建一条新任务。成功返回任务信息；有语义重复或时间冲突时返回冲突详情，不执行创建。 | title, dueDate, startTime?, endTime?, timeSegment?, priority?, groupId?, description? |
+| `query_tasks`   | 当用户想查看、列出或筛选任务时，查询任务列表。                                                             | status?, dueDate?, dueDateFrom?, dueDateTo?, priority?                                |
+| `update_task`   | 当用户想修改任务信息时，更新指定任务的字段；只传需要修改的字段，未传字段保持不变。                           | taskId, title?, dueDate?, startTime?, endTime?, timeSegment?, priority?, description? |
+| `complete_task` | 当用户表示任务已完成时，将指定任务标记为已完成。专用于完成操作，无需改用 update_task 传 status 字段。       | taskId                                                                                |
+| `delete_task`   | 当用户明确要求删除任务时，删除指定任务。                                                                   | taskId                                                                                |
 
 ---
 

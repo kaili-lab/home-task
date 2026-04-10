@@ -52,7 +52,7 @@ await graph.invoke(
 
 ### D4: Tool 不再依赖原始用户消息 [已采用]
 
-现有 `ai.service.ts` 的 tool 执行依赖 `userMessage` 做启发式检查（如 `hasExplicitTimePoint(userMessage)`）。在多 Agent 架构中，tool 只接收 LLM 提取的结构化参数。
+现有 `services/ai/index.ts` 的 tool 执行依赖 `userMessage` 做启发式检查（如 `hasExplicitTimePoint(userMessage)`）。在多 Agent 架构中，tool 只接收 LLM 提取的结构化参数。
 
 **决策**：
 - `create_task` 不再检查 `userMessage`，改为纯参数校验
@@ -104,8 +104,8 @@ packages/server/src/services/multi-agent/
 │   ├── weather.tools.ts
 │   └── notification.tools.ts
 ├── utils/
-│   ├── time.helpers.ts       ← 从 ai.service.ts 提取的纯函数
-│   ├── conflict.helpers.ts   ← 从 ai.service.ts 提取的纯函数
+│   ├── time.helpers.ts       ← 从 services/ai/index.ts 提取的纯函数
+│   ├── conflict.helpers.ts   ← 从 services/ai/index.ts 提取的纯函数
 │   └── llm.factory.ts        ← LLM 创建工厂
 └── types.ts                  ← 共享类型
 
@@ -172,7 +172,7 @@ export interface AgentConfigurable {
 
 文件：`packages/server/src/services/multi-agent/utils/llm.factory.ts`
 
-逻辑来源：`ai.service.ts` 第 242-263 行 `createLLM()`
+逻辑来源：`services/ai/index.ts` 第 242-263 行 `createLLM()`
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
@@ -181,7 +181,7 @@ import type { Bindings } from "../../../types/bindings";
 /**
  * LLM 创建工厂
  * 支持中转服务（AIHUBMIX）或官方 OpenAI API
- * 提取自 ai.service.ts，多 Agent 各节点共用同一 LLM 实例
+ * 提取自 services/ai/index.ts，多 Agent 各节点共用同一 LLM 实例
  */
 export function createLLM(env: Bindings): ChatOpenAI {
   if (env.AIHUBMIX_API_KEY) {
@@ -904,9 +904,9 @@ if (useMultiAgent) {
 1. [x] 安装依赖：`pnpm -C packages/server add @langchain/langgraph @langchain/langgraph-supervisor`
 2. [x] 创建目录结构：`multi-agent/` 下的所有子目录和空文件
 3. [x] 编写 `types.ts`：ToolResult、MultiAgentServiceResult、AgentConfigurable 类型定义
-4. [x] 编写 `llm.factory.ts`：从 ai.service.ts 第 242-263 行提取 createLLM 函数
-5. [x] 编写 `time.helpers.ts`：从 ai.service.ts 提取 17 个时间处理纯函数
-6. [x] 编写 `conflict.helpers.ts`：从 ai.service.ts 提取 7 个冲突检测纯函数
+4. [x] 编写 `llm.factory.ts`：从 services/ai/index.ts 第 242-263 行提取 createLLM 函数
+5. [x] 编写 `time.helpers.ts`：从 services/ai/index.ts 提取 17 个时间处理纯函数
+6. [x] 编写 `conflict.helpers.ts`：从 services/ai/index.ts 提取 7 个冲突检测纯函数
 7. [x] 编写 `time.helpers.test.ts`：9 个正常 case + 9 个异常 case
 8. [x] 编写 `conflict.helpers.test.ts`：4 个正常 case + 5 个异常 case
 9. [ ] 运行测试验证 Phase 1：测试文件与命令已具备，但本次文档整理未复跑
@@ -952,3 +952,4 @@ if (useMultiAgent) {
 37. [x] 编写 `multi-agent.eval.test.ts`：6 个端到端 eval 测试
 38. [ ] 运行全量测试：`pnpm -C packages/server test`，本次文档整理未复跑
 39. [ ] 手动端到端验收测试：当前文档未记录最新一轮验收结果
+

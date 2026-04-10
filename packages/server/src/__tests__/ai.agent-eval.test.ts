@@ -24,7 +24,7 @@ import {
   groupUsers,
   taskAssignments,
 } from "../db/schema";
-import { AIService } from "../services/ai.service";
+import { AIService } from "../services/ai";
 
 // 已迁移到多 Agent 架构（multi-agent/），此文件测试旧单 Agent 逻辑，跳过执行
 describe.skip("AI Agent 评测 (Eval)", () => {

@@ -27,7 +27,7 @@ import {
   groups,
   groupUsers,
 } from "../db/schema";
-import { AIService } from "../services/ai.service";
+import { AIService } from "../services/ai";
 import type { Bindings } from "../types/bindings";
 
 /**

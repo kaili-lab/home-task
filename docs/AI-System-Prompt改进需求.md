@@ -16,10 +16,10 @@
 
 **System Prompt 分散在4个位置：**
 ```
-Layer 1: buildSystemPrompt() - ai.service.ts 第258-288行
-Layer 2: supplementalRules - ai.service.ts 第678-679行
-Layer 3: forceSegmentHint - ai.service.ts 第680-685行（条件性）
-Layer 4: TOOL_DEFINITIONS - ai.service.ts 第19-169行
+Layer 1: buildSystemPrompt() - `packages/server/src/services/ai/prompt-builder.ts`
+Layer 2: supplementalRules - `packages/server/src/services/ai/agent-loop.ts`
+Layer 3: forceSegmentHint - `packages/server/src/services/ai/tool-executor.ts`（条件性）
+Layer 4: TOOL_DEFINITIONS - `packages/server/src/services/ai/tool-definitions.ts`
 ```
 
 **主要问题：**
@@ -314,7 +314,7 @@ ${groupsList}
 ## 九、相关文件
 
 ### 核心代码文件
-- `packages/server/src/services/ai.service.ts` - AI Agent 服务层
+- `packages/server/src/services/ai/index.ts` - AI Agent 服务层（入口）
 - `packages/server/src/routes/ai.routes.ts` - AI API 路由
 
 ### 设计文档

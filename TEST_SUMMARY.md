@@ -372,7 +372,7 @@ npm run test:coverage
 ## 📚 相关文档
 
 - [Vitest 官方文档](https://vitest.dev/)
-- [AI 服务实现](packages/server/src/services/ai.service.ts)
+- [AI 服务实现](packages/server/src/services/ai/index.ts)
 - [路由实现](packages/server/src/routes/ai.routes.ts)
 - [错误处理](packages/server/src/utils/ai-error-handler.ts)
 
@@ -388,3 +388,4 @@ npm run test:coverage
 - ✅ 多轮对话管理
 
 所有测试都可独立运行，使用清晰的 Mock 策略，附带详细文档。
+

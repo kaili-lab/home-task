@@ -10,7 +10,7 @@
 
 ### 1.1 背景
 
-当前项目的 AI 功能由单 Agent 实现（`ai.service.ts`，约 1400 行），所有逻辑集中在一个文件：LLM 调用、Tool 执行、时间校验、冲突检测、意图推断、对话历史管理。随着功能扩展（日历、天气、通知提醒），单 Agent 模式已到达复杂度天花板。
+当前项目的 AI 功能由单 Agent 实现（`services/ai/index.ts`，约 1400 行），所有逻辑集中在一个文件：LLM 调用、Tool 执行、时间校验、冲突检测、意图推断、对话历史管理。随着功能扩展（日历、天气、通知提醒），单 Agent 模式已到达复杂度天花板。
 
 本文最初的设计背景，是计划从 Cloudflare Workers（Serverless）迁移到传统 Node.js 部署，以解除 bundle 体积和运行时兼容性的限制，从而使用 LangGraph 的完整能力。按当前仓库状态，多 Agent 模块已经先行落地，因此这里应理解为设计动因，而不是仍未开始的前置条件。
 
@@ -19,11 +19,11 @@
 1. **功能目标**：在现有任务管理基础上，新增日历视图、天气查询、智能通知提醒功能
 2. **架构目标**：使用 LangGraph 实现 Supervisor + SubAgent 多 Agent 架构
 3. **学习目标**：关键代码逻辑需要用注释说明 LangGraph 概念，便于学习
-4. **兼容目标**：现有单 Agent 代码（`ai.service.ts`）保留不动，新模块并列存在
+4. **兼容目标**：现有单 Agent 代码（`services/ai/index.ts`）保留不动，新模块并列存在
 
 ### 1.3 不在范围内
 
-- 现有 `ai.service.ts` 的修改或删除
+- 现有 `services/ai/index.ts` 的修改或删除
 - 移动端 / 显示屏端的适配
 - 真实的短信/邮件通知发送（暂用控制台输出代替）
 - 定时调度器（cron job）的实现（通知 Agent 只负责安排提醒，不负责触发）
@@ -68,7 +68,7 @@
 ```
 packages/server/src/
 ├── services/
-│   ├── ai.service.ts                 ← 保留，遗留单 Agent（不动）
+│   ├── services/ai/index.ts                 ← 保留，遗留单 Agent（不动）
 │   ├── task.service.ts               ← 保留，多 Agent 复用
 │   │
 │   └── multi-agent/                  ← 全新模块
@@ -94,7 +94,7 @@ packages/server/src/
 ### 2.4 与现有系统的关系
 
 - **复用**：`TaskService`（数据库操作）、`db/schema.ts`（表结构）、`shared` 包的类型定义
-- **并列**：`ai.service.ts` 和 `multi-agent/` 并存，通过路由层开关切换
+- **并列**：`services/ai/index.ts` 和 `multi-agent/` 并存，通过路由层开关切换
 - **新增**：`reminders` 表（通知 Agent 的数据存储）
 
 ---
@@ -542,7 +542,7 @@ packages/server/src/__tests__/multi-agent/
 
 - 安装依赖：`@langchain/langgraph`、`@langchain/langgraph-supervisor`、`zod`
 - 创建 `multi-agent/` 目录结构
-- 从 `ai.service.ts` 提取 `time.helpers.ts` 和 `conflict.helpers.ts`（纯函数，不修改原文件）
+- 从 `services/ai/index.ts` 提取 `time.helpers.ts` 和 `conflict.helpers.ts`（纯函数，不修改原文件）
 - 创建 `llm.factory.ts`（LLM 创建工厂）
 - 创建 `types.ts`（ToolResult 等共享类型）
 - 编写 `time.helpers.test.ts` 和 `conflict.helpers.test.ts` 单元测试
@@ -639,3 +639,4 @@ export const reminders = pgTable("reminders", {
 | Supervisor 路由不准确 | 用户意图分发错误 | Graph 级测试覆盖核心场景 + Eval 评测回归 |
 | 跨 Agent 协作延迟 | 多次 LLM 调用导致响应慢 | Supervisor 并行分发（LangGraph 支持）|
 | Weather API 不可用 | 通知无法包含天气建议 | Notification Tool 降级处理，只发任务提醒 |
+

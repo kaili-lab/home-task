@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
@@ -53,6 +53,9 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   const queryClient = useQueryClient();
   const { groups } = useApp();
   const { user } = useAuth();
+  const todayGroupRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoScrolledRef = useRef(false);
+  const todayDateStr = useMemo(() => formatLocalDate(new Date()), []);
 
   // 获取本周日期范围（周一到周日）
   const weekDays = useMemo(() => {
@@ -154,6 +157,21 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
 
   // 计算loading状态
   const loading = personalLoading || defaultGroupLoading || otherGroupsLoading;
+
+  useEffect(() => {
+    if (location.pathname !== "/week") return;
+    if (loading) return;
+    if (hasAutoScrolledRef.current) return;
+    if (!todayGroupRef.current) return;
+
+    requestAnimationFrame(() => {
+      todayGroupRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      hasAutoScrolledRef.current = true;
+    });
+  }, [location.pathname, loading]);
 
   // 状态管理
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -333,26 +351,30 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
       <div className="space-y-6">
         {weekDays.map((date, index) => {
           const dateStr = formatLocalDate(date);
+          const isToday = dateStr === todayDateStr;
           const dayData = tasksByDateAndGroup[dateStr] || {
             personal: [],
             otherGroups: [],
           };
 
-          return loading ? (
-            <DayGroupSkeleton key={dateStr} date={date} taskCount={2} />
-          ) : (
-            <DayGroup
-              key={dateStr}
-              date={date}
-              dayIndex={index}
-              personalTasks={dayData.personal}
-              defaultGroup={dayData.defaultGroup}
-              otherGroups={dayData.otherGroups}
-              onToggle={toggleTaskStatus}
-              onViewTask={handleViewTask}
-              onEditTask={handleEditTask}
-              onDeleteTask={handleDeleteTask}
-            />
+          return (
+            <div key={dateStr} ref={isToday ? todayGroupRef : undefined}>
+              {loading ? (
+                <DayGroupSkeleton date={date} taskCount={2} />
+              ) : (
+                <DayGroup
+                  date={date}
+                  dayIndex={index}
+                  personalTasks={dayData.personal}
+                  defaultGroup={dayData.defaultGroup}
+                  otherGroups={dayData.otherGroups}
+                  onToggle={toggleTaskStatus}
+                  onViewTask={handleViewTask}
+                  onEditTask={handleEditTask}
+                  onDeleteTask={handleDeleteTask}
+                />
+              )}
+            </div>
           );
         })}
       </div>
