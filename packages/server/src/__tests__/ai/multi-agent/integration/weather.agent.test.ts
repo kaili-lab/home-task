@@ -1,7 +1,7 @@
-﻿import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
-import { createWeatherAgent } from "../../../services/multi-agent/agents/weather.agent";
+import { createWeatherAgent } from "../../../../services/multi-agent/agents/weather.agent";
 
 // 使用 FakeListChatModel 驱动工具调用，避免依赖真实模型
 
@@ -29,3 +29,4 @@ describe("weather.agent - 集成", () => {
     expect(String(lastMessage.content)).toContain("天气已返回");
   });
 });
+

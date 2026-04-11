@@ -1,7 +1,7 @@
-﻿import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
-import { createNotificationAgent } from "../../../services/multi-agent/agents/notification.agent";
+import { createNotificationAgent } from "../../../../services/multi-agent/agents/notification.agent";
 
 // 使用 FakeListChatModel 驱动工具调用，避免依赖真实模型
 
@@ -32,3 +32,4 @@ describe("notification.agent - 集成", () => {
     expect(String(lastMessage.content)).toContain("提醒已安排");
   });
 });
+

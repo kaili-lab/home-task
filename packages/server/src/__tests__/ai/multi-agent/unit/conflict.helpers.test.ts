@@ -1,11 +1,11 @@
-﻿import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import type { TaskInfo } from "shared";
 import {
   diceCoefficient,
   filterTimeConflicts,
   findSemanticConflicts,
   normalizeTaskTitle,
-} from "../../../services/multi-agent/utils/conflict.helpers";
+} from "../../../../services/multi-agent/utils/conflict.helpers";
 
 // 统一构造任务是为了保证测试只关注冲突逻辑，不被字段缺失干扰
 function makeTask(overrides: Partial<TaskInfo>): TaskInfo {
@@ -91,3 +91,4 @@ describe("conflict.helpers - 异常 case", () => {
     expect(diceCoefficient("", "abc")).toBe(0);
   });
 });
+

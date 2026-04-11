@@ -11,7 +11,7 @@ import {
   withTimeout,
   withRetry,
   getUserFriendlyMessage,
-} from "../utils/ai-error-handler";
+} from "../../../../utils/ai-error-handler";
 
 describe("AI 错误处理", () => {
   // AI 错误处理的核心单元测试
@@ -340,3 +340,5 @@ describe("AI 错误处理", () => {
     });
   });
 });
+
+

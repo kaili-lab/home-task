@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   formatTimeSegmentLabel,
   getCurrentTimeSegment,
@@ -11,7 +11,7 @@ import {
   isSegmentAllowedForToday,
   isTodayDate,
   parseTimeToMinutes,
-} from "../../../services/multi-agent/utils/time.helpers";
+} from "../../../../services/multi-agent/utils/time.helpers";
 
 // 统一通过假时间控制时段判定，避免真实时间导致测试不稳定
 function mockUtcTime(iso: string) {
@@ -105,3 +105,4 @@ describe("time.helpers - 异常 case", () => {
     expect(hasExplicitTimeRange("开会")).toBe(false);
   });
 });
+

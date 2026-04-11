@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PromptBuilder } from "../services/ai/prompt-builder";
+import { PromptBuilder } from "../../../../services/ai/prompt-builder";
 
 type MockDb = {
   select: ReturnType<typeof vi.fn>;
@@ -77,6 +77,8 @@ describe("PromptBuilder 合约测试", () => {
     expect(prompt).toContain("task_summary");
     expect(prompt).toContain("question");
     expect(prompt).toContain("text");
+    expect(prompt).toContain("今天的任务若给出已过去的时段或时间范围，必须追问是否调整");
+    expect(prompt).toContain("两种模式互斥");
   });
 
   it("应注入动态上下文（日期、星期、时段、群组）", async () => {
@@ -96,3 +98,5 @@ describe("PromptBuilder 合约测试", () => {
     expect(prompt).toContain("- 骑行群（ID: 22）");
   });
 });
+
+

@@ -1,22 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Hono } from "hono";
-import aiRoutes from "../routes/ai.routes";
-import type { Bindings } from "../types/bindings";
-import { AIService } from "../services/ai";
-import { MultiAgentService } from "../services/multi-agent";
+import aiRoutes from "../../../../routes/ai.routes";
+import type { Bindings } from "../../../../types/bindings";
+import { AIService } from "../../../../services/ai";
+import { MultiAgentService } from "../../../../services/multi-agent";
 
 const { mockAIChat, mockMultiChat } = vi.hoisted(() => ({
   mockAIChat: vi.fn(),
   mockMultiChat: vi.fn(),
 }));
 
-vi.mock("../services/ai", () => ({
+vi.mock("../../../../services/ai", () => ({
   AIService: vi.fn(() => ({
     chat: mockAIChat,
   })),
 }));
 
-vi.mock("../services/multi-agent", () => ({
+vi.mock("../../../../services/multi-agent", () => ({
   MultiAgentService: vi.fn(() => ({
     chat: mockMultiChat,
   })),
@@ -160,3 +160,4 @@ describe("ai.routes 多 Agent 路由开关", () => {
     expect(vi.mocked(MultiAgentService)).not.toHaveBeenCalled();
   });
 });
+

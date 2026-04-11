@@ -1,5 +1,5 @@
-﻿import { describe, it, expect, vi, beforeEach } from "vitest";
-import { scheduleReminderTool } from "../../../services/multi-agent/tools/notification.tools";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { scheduleReminderTool } from "../../../../services/multi-agent/tools/notification.tools";
 
 // 通过模拟 db 链式调用，避免依赖真实数据库
 function makeDbMock() {
@@ -117,3 +117,4 @@ describe("notification.tools - 异常 case", () => {
     expect(json.message).toContain("当天 08:00");
   });
 });
+

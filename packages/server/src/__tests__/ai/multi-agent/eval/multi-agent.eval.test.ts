@@ -1,6 +1,6 @@
-﻿import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { TaskInfo } from "shared";
-import { MultiAgentService } from "../../../services/multi-agent";
+import { MultiAgentService } from "../../../../services/multi-agent";
 
 // 使用内存数据结构模拟任务与提醒，避免依赖真实数据库
 let taskIdSeq = 1;
@@ -8,7 +8,7 @@ const tasksStore: TaskInfo[] = [];
 const remindersStore: Array<{ id: number; userId: number; content: string; status: string }> = [];
 let reminderIdSeq = 1;
 
-vi.mock("../../../services/task.service", () => {
+vi.mock("../../../../services/task.service", () => {
   return {
     TaskService: vi.fn().mockImplementation(() => ({
       async createTask(userId: number, data: any) {
@@ -151,3 +151,4 @@ describe("multi-agent.eval", () => {
     expect(joke.content.length).toBeGreaterThan(0);
   });
 });
+

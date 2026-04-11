@@ -1,5 +1,5 @@
-﻿import { describe, it, expect } from "vitest";
-import { getWeatherTool } from "../../../services/multi-agent/tools/weather.tools";
+import { describe, it, expect } from "vitest";
+import { getWeatherTool } from "../../../../services/multi-agent/tools/weather.tools";
 
 // 通过直接调用工具验证 mock 天气逻辑是否稳定
 
@@ -23,3 +23,4 @@ describe("weather.tools", () => {
     expect(json.status).toBe("error");
   });
 });
+

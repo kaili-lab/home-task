@@ -8,8 +8,8 @@
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "lint": "eslint src",
     "test": "vitest",
-    "test:ci": "vitest run --exclude \"src/__tests__/{aihubmix.llm.connectivity.test.ts,multi-agent/eval/multi-agent.eval.test.ts}\"",
-    "test:external": "vitest run src/__tests__/aihubmix.llm.connectivity.test.ts src/__tests__/multi-agent/eval/multi-agent.eval.test.ts",
+    "test:ci": "vitest run --exclude \"src/__tests__/{ai/single-agent/external/aihubmix.llm.connectivity.test.ts,ai/multi-agent/eval/multi-agent.eval.test.ts}\"",
+    "test:external": "vitest run src/__tests__/ai/single-agent/external/aihubmix.llm.connectivity.test.ts src/__tests__/ai/multi-agent/eval/multi-agent.eval.test.ts",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "db-push": "npx drizzle-kit push"
@@ -43,3 +43,6 @@
     "wrangler": "^4.4.0"
   }
 }
+
+
+

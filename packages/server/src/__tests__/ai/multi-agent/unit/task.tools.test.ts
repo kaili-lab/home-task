@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import type { TaskInfo } from "shared";
 import {
   createTaskTool,
@@ -6,7 +6,7 @@ import {
   modifyTaskTool,
   queryTasksTool,
   removeTaskTool,
-} from "../../../services/multi-agent/tools/task.tools";
+} from "../../../../services/multi-agent/tools/task.tools";
 
 // 使用 mock 方式隔离数据库依赖，保证工具逻辑可控
 const mockCreateTask = vi.fn();
@@ -16,7 +16,7 @@ const mockUpdateTaskStatus = vi.fn();
 const mockDeleteTask = vi.fn();
 const mockGetTaskById = vi.fn();
 
-vi.mock("../../../services/task.service", () => {
+vi.mock("../../../../services/task.service", () => {
   return {
     TaskService: vi.fn().mockImplementation(() => ({
       createTask: mockCreateTask,
@@ -230,3 +230,4 @@ describe("task.tools - 异常 case", () => {
     expect(json.status).toBe("error");
   });
 });
+

@@ -1,7 +1,7 @@
-﻿import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
-import { buildSupervisorGraph } from "../../../services/multi-agent/supervisor";
+import { buildSupervisorGraph } from "../../../../services/multi-agent/supervisor";
 
 function makeConfig() {
   return {
@@ -172,3 +172,4 @@ describe("supervisor - 错误处理测试", () => {
     expect(result.messages.length).toBeGreaterThan(0);
   });
 });
+

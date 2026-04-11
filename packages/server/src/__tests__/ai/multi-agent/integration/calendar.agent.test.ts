@@ -1,7 +1,7 @@
-﻿import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
-import { createCalendarAgent } from "../../../services/multi-agent/agents/calendar.agent";
+import { createCalendarAgent } from "../../../../services/multi-agent/agents/calendar.agent";
 
 // 使用 FakeListChatModel 控制工具调用链，避免依赖真实模型
 
@@ -32,3 +32,4 @@ describe("calendar.agent - 集成", () => {
     expect(String(lastMessage.content)).toContain("空闲时间已返回");
   });
 });
+

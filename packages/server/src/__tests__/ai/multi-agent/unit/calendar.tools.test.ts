@@ -1,11 +1,11 @@
-﻿import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { TaskInfo } from "shared";
-import { findFreeSlotsTool, getDayScheduleTool } from "../../../services/multi-agent/tools/calendar.tools";
+import { findFreeSlotsTool, getDayScheduleTool } from "../../../../services/multi-agent/tools/calendar.tools";
 
 // 使用 mock TaskService 让测试只关注时间计算逻辑
 const mockGetTasks = vi.fn();
 
-vi.mock("../../../services/task.service", () => {
+vi.mock("../../../../services/task.service", () => {
   return {
     TaskService: vi.fn().mockImplementation(() => ({
       getTasks: mockGetTasks,
@@ -112,3 +112,4 @@ describe("calendar.tools - 异常 case", () => {
     expect(json.message).toContain("当天没有空闲时间");
   });
 });
+

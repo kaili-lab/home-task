@@ -1,15 +1,15 @@
-﻿import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AIMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
 import type { TaskInfo } from "shared";
-import { createTaskAgent } from "../../../services/multi-agent/agents/task.agent";
+import { createTaskAgent } from "../../../../services/multi-agent/agents/task.agent";
 
 // 使用 FakeListChatModel 是为了控制 LLM 输出，确保测试只验证工具调用链
 const mockCreateTask = vi.fn();
 const mockUpdateTaskStatus = vi.fn();
 const mockGetTasks = vi.fn();
 
-vi.mock("../../../services/task.service", () => {
+vi.mock("../../../../services/task.service", () => {
   return {
     TaskService: vi.fn().mockImplementation(() => ({
       createTask: mockCreateTask,
@@ -157,3 +157,4 @@ describe("task.agent - 集成", () => {
     expect(allContent).toContain("DB failed");
   });
 });
+
