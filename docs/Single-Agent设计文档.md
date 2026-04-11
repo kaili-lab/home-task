@@ -41,7 +41,233 @@ Layer 4: History
 
 ---
 
-## 4. 时间表达逻辑（重点）
+## 4. 架构图
+
+### 4.1 C4 Level 3 — 组件结构图
+
+> 展示 `packages/server/src/services/ai/` 内部 8 个文件的职责与依赖关系。
+
+```mermaid
+C4Component
+    title AI Chat Module — Component Diagram (L3)
+
+    Container_Boundary(server, "API Server — Hono + Cloudflare Workers") {
+        Component(aiService,        "AIService",         "index.ts",              "模块入口；组装所有依赖，对外暴露 chat()")
+        Component(agentLoop,        "AgentLoop",         "agent-loop.ts",         "LLM invoke 主循环（最多 10 轮）；编排所有组件")
+        Component(promptBuilder,    "PromptBuilder",     "prompt-builder.ts",     "构建 system prompt（注入日期/时段/群组）；提供时间工具方法")
+        Component(historyManager,   "HistoryManager",    "history-manager.ts",    "从 messages 表加载/保存对话历史")
+        Component(hallucinationGuard, "HallucinationGuard", "hallucination-guard.ts", "关键词意图推断；LLM 幻觉检测；确认语义判断")
+        Component(toolExecutor,     "ToolExecutor",      "tool-executor.ts",      "执行 5 个 tool call；时间校验；写数据库")
+        Component(conflictDetector, "ConflictDetector",  "conflict-detector.ts",  "语义冲突（Dice 系数）+ 时间重叠检测")
+        Component(toolDefs,         "TOOL_DEFINITIONS",  "tool-definitions.ts",   "OpenAI JSON Schema 工具定义（静态常量）")
+    }
+
+    System_Ext(llm,  "LLM API",          "OpenAI / AIHubMix（via ChatOpenAI）")
+    SystemDb_Ext(db, "Neon PostgreSQL",   "tasks / messages / groups / groupUsers 表")
+
+    Rel(aiService,         agentLoop,        "委托 chat()")
+    Rel(agentLoop,         promptBuilder,    "buildSystemPrompt(); 短路时间校验")
+    Rel(agentLoop,         historyManager,   "loadHistory(); loadLastAssistantMessage(); saveMessage()")
+    Rel(agentLoop,         hallucinationGuard, "inferTaskIntent(); shouldRequireToolCall(); shouldSkipSemanticCheck(); looksLikeActionSuccess()")
+    Rel(agentLoop,         toolExecutor,     "executeToolCall(userId, name, args, message, opts)")
+    Rel(agentLoop,         toolDefs,         "作为 tools 参数传入 LLM")
+    Rel(agentLoop,         llm,              "invoke(messages, tools, toolChoice)", "HTTPS")
+    Rel(hallucinationGuard, promptBuilder,   "hasDateHint()")
+    Rel(toolExecutor,      promptBuilder,    "时间工具方法（hasTimeRange/Point/Segment, isAllowed, isPassed, inferSegment…）")
+    Rel(toolExecutor,      conflictDetector, "getTasksForDate(); filterTimeConflicts(); findSemanticConflicts(); mergeConflicts()")
+    Rel(toolExecutor,      db,               "TaskService（create / update / delete / query）", "SQL")
+    Rel(conflictDetector,  db,               "TaskService.getTasks(pending, dueDate)", "SQL")
+    Rel(historyManager,    db,               "messages 表读写", "SQL")
+    Rel(promptBuilder,     db,               "groupUsers + groups 联表查询", "SQL")
+```
+
+---
+
+### 4.2 Sequence Diagram — chat() 完整调用时序
+
+> 覆盖所有分支：短路返回 / 幻觉拦截 / 五个 tool 的执行路径 / 冲突/确认早退 / 超时兜底。
+
+```mermaid
+sequenceDiagram
+    actor U as 用户
+    participant AL as AgentLoop
+    participant PB as PromptBuilder
+    participant HM as HistoryManager
+    participant HG as HallucinationGuard
+    participant LLM as LLM API
+    participant TE as ToolExecutor
+    participant CD as ConflictDetector
+    participant DB as Neon PostgreSQL
+
+    U->>AL: chat(userId, message)
+
+    note over AL,DB: ── 初始化阶段 ──
+
+    AL->>PB: buildSystemPrompt(userId)
+    PB->>DB: SELECT groupUsers+groups WHERE userId AND status=active
+    DB-->>PB: userGroups[]
+    PB-->>AL: systemPrompt（含今日/星期/时段/群组列表）
+
+    AL->>HM: loadHistory(userId, limit=20)
+    HM->>DB: SELECT messages ORDER BY createdAt DESC LIMIT 20
+    DB-->>HM: rows[]（过滤 system 角色后反转为正序）
+    HM-->>AL: BaseMessage[]
+
+    AL->>HM: loadLastAssistantMessage(userId)
+    HM->>DB: SELECT messages WHERE role=assistant ORDER BY createdAt DESC LIMIT 1
+    DB-->>HM: row | null
+    HM-->>AL: LastAssistantMessage | null
+
+    AL->>HG: shouldSkipSemanticConflictCheck(message, lastMsg.content)
+    note right of HG: isAffirmative(msg) && didAskForSemanticConfirmation(lastMsg)
+    HG-->>AL: skipSemanticCheck (bool)
+
+    AL->>HG: inferTaskIntent(message)
+    note right of HG: 关键词匹配：delete>complete>update>query>create
+    HG-->>AL: intent (create|query|update|complete|delete|null)
+
+    note over AL,DB: ── 短路检测（绕过 LLM）──
+
+    alt message 含"今天" && hasTimeSegmentHint(message)
+        AL->>PB: inferTimeSegmentFromText(message) → hintedSegment
+        AL->>PB: isSegmentAllowedForToday(today, hintedSegment)
+        PB-->>AL: false（当前时段已过目标时段）
+        AL->>HM: saveMessage(user, message)
+        AL->>HM: saveMessage(assistant, buildSegmentNotAllowedMessage(hintedSegment), question)
+        AL-->>U: { type:"question", content }
+    end
+
+    note over AL,LLM: ── LLM 主循环（index 0-9，最多 10 轮）──
+
+    loop index = 0..9
+
+        note over AL: index==0 && (shouldRequireToolCall(msg) || skipSemanticCheck) → toolChoice="required"，否则 auto
+
+        AL->>LLM: invoke([SystemMsg, ...history, HumanMsg, ...ToolMsgs], tools, toolChoice)
+        LLM-->>AL: AIMessage { content, tool_calls[] }
+
+        alt tool_calls 为空（LLM 直接文字回复）
+
+            AL->>HG: looksLikeActionSuccess(content)
+            alt 有任务意图 && content 含成功措辞 && 无 actionPerformed（幻觉）
+                alt lastSignificantResult 含 conflictingTasks
+                    note over AL: content ← "当前任务存在冲突或重复，请确认或调整后再创建"
+                else
+                    AL->>HG: buildActionNotExecutedMessage(intent)
+                    HG-->>AL: 纠正提示文本
+                    note over AL: content ← 纠正提示
+                end
+            end
+
+            AL->>HM: saveMessage(user, message)
+            AL->>HM: saveMessage(assistant, content, type, payload{task, conflictingTasks})
+            AL-->>U: AIServiceResult { content, type, payload }
+
+        else 有 tool_calls（逐个处理）
+
+            AL->>TE: executeToolCall(userId, toolName, args, message, {skipSemanticCheck})
+
+            alt toolName = create_task
+
+                TE->>PB: hasExplicitTimeRange(msg) / hasExplicitTimePoint(msg)
+
+                alt 有时间点但缺结束时间（单侧时间）
+                    TE-->>AL: { status:need_confirmation, "你提到开始时间，请问几点结束？" }
+
+                else 时间完整或无具体时间
+                    TE->>PB: hasTimeSegmentHint(msg) → inferTimeSegmentFromText → hintedSegment
+                    alt hintedSegment 且今天时段已过
+                        TE->>PB: buildSegmentNotAllowedMessage(hintedSegment)
+                        PB-->>TE: 提示文本
+                        TE-->>AL: { status:need_confirmation, message }
+                    else
+                        TE->>PB: isTimeRangePassedForToday(dueDate, startTime, endTime)
+                        alt 具体时间段已过今天
+                            TE-->>AL: { status:need_confirmation, "今天已过 startTime-endTime，请确认" }
+                        else
+                            TE->>CD: getTasksForDate(userId, effectiveDueDate)
+                            CD->>DB: TaskService.getTasks(userId, {status:pending, dueDate})
+                            DB-->>CD: tasks[]
+                            CD-->>TE: tasksForDate[]
+
+                            TE->>CD: filterTimeConflicts(tasks, startTime, endTime)
+                            CD-->>TE: timeConflicts[]
+
+                            alt skipSemanticCheck = false
+                                TE->>CD: findSemanticConflicts(tasks, title)
+                                note right of CD: normalizeTitle + Dice 系数 ≥ 0.75 判重
+                                CD-->>TE: semanticConflicts[]
+                            end
+
+                            alt 有时间冲突 或 有语义冲突
+                                TE->>CD: mergeConflictingTasks(timeConflicts, semanticConflicts)
+                                CD-->>TE: merged[]
+                                TE-->>AL: { status:conflict, conflictingTasks:merged, message, responseType:question }
+                            else 无冲突
+                                TE->>DB: TaskService.createTask(userId, taskData)
+                                DB-->>TE: TaskInfo
+                                TE-->>AL: { status:success, task, actionPerformed:create, responseType:task_summary }
+                            end
+                        end
+                    end
+                end
+
+            else toolName = query_tasks
+
+                alt dueDate / dueDateFrom / dueDateTo 均为空
+                    TE-->>AL: { status:need_confirmation, "请先告诉我要查询哪一天" }
+                else
+                    TE->>DB: TaskService.getTasks(userId, {status, dueDate, dueDateFrom, dueDateTo, priority})
+                    DB-->>TE: { tasks[] }
+                    alt tasks 为空
+                        TE-->>AL: { status:success, "没有找到符合条件的任务" }
+                    else
+                        note over TE: 格式化为 [ID:x] title | 日期 | 时间 | 状态 | 优先级
+                        TE-->>AL: { status:success, message:列表文本 }
+                    end
+                end
+
+            else toolName = update_task
+                TE->>DB: TaskService.updateTask(taskId, userId, patchFields)
+                DB-->>TE: TaskInfo
+                TE-->>AL: { status:success, task, actionPerformed:update, responseType:task_summary }
+
+            else toolName = complete_task
+                TE->>DB: TaskService.updateTaskStatus(taskId, userId, "completed")
+                DB-->>TE: TaskInfo
+                TE-->>AL: { status:success, task, actionPerformed:complete, responseType:task_summary }
+
+            else toolName = delete_task
+                alt userMessage 不含确认关键词（确认删除/删吧/…）
+                    TE-->>AL: { status:need_confirmation, "请回复确认删除后我再执行" }
+                else
+                    TE->>DB: TaskService.deleteTask(taskId, userId)
+                    DB-->>TE: void
+                    TE-->>AL: { status:success, actionPerformed:delete }
+                end
+            end
+
+            alt toolResult.status = conflict | need_confirmation
+                AL->>HM: saveMessage(user, message)
+                AL->>HM: saveMessage(assistant, toolResult.message, question, {conflictingTasks})
+                AL-->>U: { type:"question", payload:{conflictingTasks?} }
+            else toolResult.status = success
+                AL->>AL: messages.push(ToolMessage(toolResult.message, toolCallId))
+                note over AL: 记录 lastSignificantResult（task / conflictingTasks / actionPerformed）
+            end
+
+        end
+    end
+
+    note over AL,DB: ── 超时兜底（10 轮未命中任何 return）──
+    AL->>HM: saveMessage(user, message)
+    AL->>HM: saveMessage(assistant, "抱歉，处理超时，请重新尝试")
+    AL-->>U: { type:"text", content:"抱歉，处理超时，请重新尝试" }
+```
+
+---
+
+## 5. 时间表达逻辑（重点）
 
 任务时间有两种模式，二选一：
 
@@ -75,7 +301,7 @@ Layer 4: History
 
 ---
 
-## 5. Tool 定义
+## 6. Tool 定义
 
 > description 写法原则见 `agent-design-principle.md`。
 
@@ -89,7 +315,7 @@ Layer 4: History
 
 ---
 
-## 6. System Prompt 规则（摘要）
+## 7. System Prompt 规则（摘要）
 
 - 未给日期强制默认今天
 - 今天已过的时间段/具体时间范围必须追问确认，禁止自动纠正
@@ -101,7 +327,7 @@ Layer 4: History
 
 ---
 
-## 7. 冲突检测
+## 8. 冲突检测
 
 仅在具体时间段模式下检测：
 
@@ -111,14 +337,14 @@ existingStart < newEnd AND existingEnd > newStart
 
 ---
 
-## 8. 路由
+## 9. 路由
 
 - `POST /api/ai/chat`
 - `GET /api/ai/messages`
 
 ---
 
-## 9. 交互示例（以 2026-02-05 为“今天”）
+## 10. 交互示例（以 2026-02-05 为“今天”）
 
 ### 1) 模糊时间段（不追问）
 
