@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   onCreateGroup: () => void;
+  onNavigate?: () => void;
+  isMobile?: boolean;
 }
 
 const navItems: { path: string; icon: string; label: string }[] = [
@@ -18,7 +20,7 @@ const navItems: { path: string; icon: string; label: string }[] = [
   { path: "/ai", icon: "🤖", label: "AI助手" },
 ];
 
-export function Sidebar({ onCreateGroup }: SidebarProps) {
+export function Sidebar({ onCreateGroup, onNavigate, isMobile = false }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -28,6 +30,17 @@ export function Sidebar({ onCreateGroup }: SidebarProps) {
   const handleLogout = async () => {
     await signOut();
     navigate("/login");
+    onNavigate?.();
+  };
+
+  const handleProfile = () => {
+    navigate("/profile");
+    onNavigate?.();
+  };
+
+  const handleCreateGroup = () => {
+    onCreateGroup();
+    onNavigate?.();
   };
 
   const handleNav = (path: string) => {
@@ -35,13 +48,20 @@ export function Sidebar({ onCreateGroup }: SidebarProps) {
       if (path === "/today" || path === "/week") {
         queryClient.refetchQueries({ queryKey: ["tasks"], type: "active" });
       }
+      onNavigate?.();
       return;
     }
     navigate(path);
+    onNavigate?.();
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <aside
+      className={cn(
+        "h-full w-64 shrink-0 border-r border-gray-200 bg-white flex flex-col",
+        isMobile && "shadow-xl",
+      )}
+    >
       {/* Logo */}
       <div className="p-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -55,7 +75,7 @@ export function Sidebar({ onCreateGroup }: SidebarProps) {
 
       {/* User Info - 🔥 点击跳转到 Profile */}
       <button
-        onClick={() => navigate("/profile")}
+        onClick={handleProfile}
         className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
@@ -95,7 +115,7 @@ export function Sidebar({ onCreateGroup }: SidebarProps) {
 
         {/* Groups */}
         <div className="mt-4">
-          <SidebarGroups onCreateGroup={onCreateGroup} />
+          <SidebarGroups onCreateGroup={handleCreateGroup} />
         </div>
       </nav>
 
