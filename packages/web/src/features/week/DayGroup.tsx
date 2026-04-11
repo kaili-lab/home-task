@@ -74,11 +74,7 @@ export function DayGroup({
           otherGroups.reduce((sum, g) => sum + g.tasks.length, 0);
 
         if (totalTaskCount === 0) {
-          return (
-            <div className="ml-20 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-200 text-center">
-              <p className="text-sm text-gray-400">暂无任务</p>
-            </div>
-          );
+          return null;
         }
 
         return (

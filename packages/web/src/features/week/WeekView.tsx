@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -48,8 +48,17 @@ function taskInfoToTask(taskInfo: TaskInfo): Task {
   };
 }
 
+function parseWeekOffset(value: string | null): number {
+  if (!value) return 0;
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return 0;
+  return parsed;
+}
+
 export function WeekView({ onCreateTask }: WeekViewProps) {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [weekOffset, setWeekOffset] = useState(() => parseWeekOffset(searchParams.get("weekOffset")));
   const queryClient = useQueryClient();
   const { groups } = useApp();
   const { user } = useAuth();
@@ -57,14 +66,31 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   const hasAutoScrolledRef = useRef(false);
   const todayDateStr = useMemo(() => formatLocalDate(new Date()), []);
 
-  // 获取本周日期范围（周一到周日）
+  useEffect(() => {
+    const nextOffset = parseWeekOffset(searchParams.get("weekOffset"));
+    setWeekOffset((prev) => (prev === nextOffset ? prev : nextOffset));
+  }, [searchParams]);
+
+  const updateWeekOffset = (nextOffset: number) => {
+    setWeekOffset(nextOffset);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (nextOffset === 0) {
+      nextSearchParams.delete("weekOffset");
+    } else {
+      nextSearchParams.set("weekOffset", String(nextOffset));
+    }
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
+  // 获取周日期范围（周一到周日）
   const weekDays = useMemo(() => {
     const today = new Date();
     const currentDay = today.getDay();
     const diff = currentDay === 0 ? -6 : 1 - currentDay; // 如果是周日，往前推6天；否则推到周一
 
     const monday = new Date(today);
-    monday.setDate(today.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(today.getDate() + diff + weekOffset * 7);
 
     const days = [];
     for (let i = 0; i < 7; i++) {
@@ -73,7 +99,7 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
       days.push(date);
     }
     return days;
-  }, []);
+  }, [weekOffset]);
 
   // 计算本周日期范围
   const weekRange = useMemo(() => {
@@ -159,7 +185,12 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   const loading = personalLoading || defaultGroupLoading || otherGroupsLoading;
 
   useEffect(() => {
+    hasAutoScrolledRef.current = false;
+  }, [weekOffset]);
+
+  useEffect(() => {
     if (location.pathname !== "/week") return;
+    if (weekOffset !== 0) return;
     if (loading) return;
     if (hasAutoScrolledRef.current) return;
     if (!todayGroupRef.current) return;
@@ -171,7 +202,7 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
       });
       hasAutoScrolledRef.current = true;
     });
-  }, [location.pathname, loading]);
+  }, [location.pathname, loading, weekOffset]);
 
   // 状态管理
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -336,15 +367,31 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   return (
     <section className="p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">本周计划 📅</h2>
+          <h2 className="text-2xl font-bold text-gray-800">周计划 📅</h2>
           <p className="text-gray-500 text-sm mt-1">{dateRange}</p>
         </div>
-        <Button onClick={onCreateTask} className="bg-orange-500 hover:bg-orange-600">
-          <span className="mr-2">➕</span>
-          新建任务
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => updateWeekOffset(weekOffset - 1)}>
+            ← 上一周
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => updateWeekOffset(0)}
+            disabled={weekOffset === 0}
+          >
+            本周
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => updateWeekOffset(weekOffset + 1)}>
+            下一周 →
+          </Button>
+          <Button onClick={onCreateTask} className="bg-orange-500 hover:bg-orange-600">
+            <span className="mr-2">➕</span>
+            新建任务
+          </Button>
+        </div>
       </div>
 
       {/* Week Days */}
