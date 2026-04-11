@@ -14,62 +14,99 @@ function createPromptBuilder() {
 
 describe("HallucinationGuard", () => {
   it.each([
-    ["提醒我明天开会", "create"],
-    ["查看明天的任务", "query"],
-    ["把任务改为后天", "update"],
-    ["完成周报", "complete"],
-    ["删除会议", "delete"],
-    ["你好呀", null],
-  ])("应识别意图: %s -> %s", (message, expected) => {
+    ["提醒我明天开会", "create", true],
+    ["查看明天的任务", "query", true],
+    ["查看任务", "query", false],
+    ["把任务改为后天", "update", true],
+    ["完成周报", "complete", true],
+    ["删除会议", "delete", true],
+    ["你好呀", null, false],
+  ])("应评估用户消息策略: %s", (message, expectedIntent, expectedRequireToolCall) => {
     const guard = new HallucinationGuard(createPromptBuilder());
-    expect(guard.inferTaskIntent(message)).toBe(expected);
-  });
-
-  it("应判断哪些请求必须先触发 tool call", () => {
-    const guard = new HallucinationGuard(createPromptBuilder());
-
-    expect(guard.shouldRequireToolCall("提醒我明天下午开会")).toBe(true);
-    expect(guard.shouldRequireToolCall("查看明天的任务")).toBe(true);
-    expect(guard.shouldRequireToolCall("查看任务")).toBe(false);
-    expect(guard.shouldRequireToolCall("你好")).toBe(false);
+    expect(guard.evaluateUserMessage(message, null)).toEqual({
+      inferredIntent: expectedIntent,
+      requireToolCall: expectedRequireToolCall,
+      skipSemanticConflictCheck: false,
+    });
   });
 
   it("应识别语义冲突确认场景", () => {
     const guard = new HallucinationGuard(createPromptBuilder());
-
     expect(
-      guard.shouldSkipSemanticConflictCheck(
+      guard.evaluateUserMessage(
         "确认",
         "你当天已有类似任务：\n- 取快递（下午）\n是否仍要创建？回复“确认”继续创建。",
       ),
-    ).toBe(true);
+    ).toMatchObject({
+      skipSemanticConflictCheck: true,
+    });
+    expect(guard.evaluateUserMessage("好的", "已帮你创建任务。")).toMatchObject({
+      skipSemanticConflictCheck: false,
+    });
+  });
 
+  it("无 tool call 且无动作成功表述时应原样返回", () => {
+    const guard = new HallucinationGuard(createPromptBuilder());
     expect(
-      guard.shouldSkipSemanticConflictCheck(
-        "好的",
-        "已帮你创建任务。",
-      ),
-    ).toBe(false);
+      guard.resolveNoToolCallResponse({
+        llmContent: "我可以帮你创建任务。",
+        inferredIntent: "create",
+        lastSignificantResult: null,
+      }),
+    ).toEqual({
+      action: "return_as_is",
+      content: "我可以帮你创建任务。",
+    });
   });
 
-  it("应识别疑似已经执行成功的幻觉表述", () => {
+  it("无 tool call 且有成功措辞时应返回未执行提示", () => {
     const guard = new HallucinationGuard(createPromptBuilder());
-
-    expect(guard.looksLikeActionSuccess("已为你创建任务")).toBe(true);
-    expect(guard.looksLikeActionSuccess("任务更新成功")).toBe(true);
-    expect(guard.looksLikeActionSuccess("我可以帮你创建任务")).toBe(false);
+    expect(
+      guard.resolveNoToolCallResponse({
+        llmContent: "已为你创建任务。",
+        inferredIntent: "create",
+        lastSignificantResult: null,
+      }),
+    ).toEqual({
+      action: "correct_with_not_executed_message",
+      content: "我还没有实际创建任务。请确认任务内容后我再创建。",
+    });
   });
 
-  it.each([
-    ["create", "我还没有实际创建任务。请确认任务内容后我再创建。"],
-    ["update", "我还没有更新任务。请告诉我要修改哪一条任务，或让我先帮你查找。"],
-    ["complete", "我还没有完成任务。请告诉我要完成哪一条任务，或让我先帮你查找。"],
-    ["delete", "我还没有删除任务。请确认要删除哪一条任务，或让我先帮你查找。"],
-    ["query", "我还没有查询任务。请告诉我需要查看的日期。"],
-    [null, "我还没有执行任务操作。请再确认你的需求。"],
-  ])("应返回对应的未执行提示: %s", (intent, expected) => {
+  it("有冲突上下文时应优先返回冲突提示", () => {
     const guard = new HallucinationGuard(createPromptBuilder());
-    expect(guard.buildActionNotExecutedMessage(intent as any)).toBe(expected);
+    expect(
+      guard.resolveNoToolCallResponse({
+        llmContent: "已为你创建任务。",
+        inferredIntent: "create",
+        lastSignificantResult: {
+          status: "conflict",
+          message: "存在冲突，请先确认。",
+          conflictingTasks: [{ id: 1, title: "开会" } as any],
+        },
+      }),
+    ).toEqual({
+      action: "correct_with_conflict_context",
+      content: "当前任务存在冲突或重复，请确认或调整后再创建。",
+    });
+  });
+
+  it("已经执行过动作时不应修正内容", () => {
+    const guard = new HallucinationGuard(createPromptBuilder());
+    expect(
+      guard.resolveNoToolCallResponse({
+        llmContent: "已为你创建任务。",
+        inferredIntent: "create",
+        lastSignificantResult: {
+          status: "success",
+          message: "任务创建成功",
+          actionPerformed: "create",
+        },
+      }),
+    ).toEqual({
+      action: "return_as_is",
+      content: "已为你创建任务。",
+    });
   });
 });
 

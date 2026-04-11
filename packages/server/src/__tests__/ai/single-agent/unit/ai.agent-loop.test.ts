@@ -36,13 +36,17 @@ function createAgentLoop(overrides?: {
   };
 
   const hallucinationGuard = {
-    shouldSkipSemanticConflictCheck: vi.fn().mockReturnValue(false),
-    inferTaskIntent: vi.fn().mockReturnValue("create"),
-    shouldRequireToolCall: vi.fn().mockReturnValue(false),
-    looksLikeActionSuccess: vi.fn().mockReturnValue(false),
-    buildActionNotExecutedMessage: vi
+    evaluateUserMessage: vi.fn().mockReturnValue({
+      inferredIntent: "create",
+      requireToolCall: false,
+      skipSemanticConflictCheck: false,
+    }),
+    resolveNoToolCallResponse: vi
       .fn()
-      .mockReturnValue("我还没有实际创建任务。请确认任务内容后我再创建。"),
+      .mockImplementation(({ llmContent }) => ({
+        action: "return_as_is",
+        content: llmContent,
+      })),
     ...overrides?.hallucinationGuard,
   };
 
@@ -116,7 +120,11 @@ describe("AgentLoop", () => {
     const { loop, historyManager, hallucinationGuard, toolExecutor } =
       createAgentLoop({
         hallucinationGuard: {
-          shouldRequireToolCall: vi.fn().mockReturnValue(true),
+          evaluateUserMessage: vi.fn().mockReturnValue({
+            inferredIntent: "create",
+            requireToolCall: true,
+            skipSemanticConflictCheck: false,
+          }),
         },
         toolExecutor: {
           executeToolCall: vi
@@ -148,8 +156,9 @@ describe("AgentLoop", () => {
       type: "task_summary",
       payload: { task, conflictingTasks: undefined },
     });
-    expect(hallucinationGuard.shouldRequireToolCall).toHaveBeenCalledWith(
+    expect(hallucinationGuard.evaluateUserMessage).toHaveBeenCalledWith(
       "明天提醒我买菜",
+      null,
     );
     expect(langchainMocks.invoke.mock.calls[0][1]).toMatchObject({
       tool_choice: "required",
@@ -177,10 +186,10 @@ describe("AgentLoop", () => {
   it("无 tool call 且疑似假成功时应改写回复", async () => {
     const { loop, historyManager, hallucinationGuard } = createAgentLoop({
       hallucinationGuard: {
-        looksLikeActionSuccess: vi.fn().mockReturnValue(true),
-        buildActionNotExecutedMessage: vi
-          .fn()
-          .mockReturnValue("我还没有实际创建任务。请确认任务内容后我再创建。"),
+        resolveNoToolCallResponse: vi.fn().mockReturnValue({
+          action: "correct_with_not_executed_message",
+          content: "我还没有实际创建任务。请确认任务内容后我再创建。",
+        }),
       },
     });
 
@@ -199,9 +208,11 @@ describe("AgentLoop", () => {
         conflictingTasks: undefined,
       },
     });
-    expect(hallucinationGuard.looksLikeActionSuccess).toHaveBeenCalledWith(
-      "已为你创建任务。",
-    );
+    expect(hallucinationGuard.resolveNoToolCallResponse).toHaveBeenCalledWith({
+      llmContent: "已为你创建任务。",
+      inferredIntent: "create",
+      lastSignificantResult: null,
+    });
     expect(historyManager.saveMessage).toHaveBeenNthCalledWith(
       2,
       7,

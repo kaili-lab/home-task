@@ -1,10 +1,57 @@
-import type { TaskIntent } from "./types";
+import type {
+  NoToolCallResponsePolicy,
+  TaskIntent,
+  ToolResult,
+  UserMessagePolicy,
+} from "./types";
 import type { PromptBuilder } from "./prompt-builder";
 
 export class HallucinationGuard {
   constructor(private promptBuilder: PromptBuilder) {}
 
-  inferTaskIntent(message: string): TaskIntent {
+  evaluateUserMessage(
+    message: string,
+    lastAssistantMessage?: string | null,
+  ): UserMessagePolicy {
+    const inferredIntent = this.inferTaskIntent(message);
+    return {
+      inferredIntent,
+      requireToolCall: this.shouldRequireToolCall(message, inferredIntent),
+      skipSemanticConflictCheck: this.shouldSkipSemanticConflictCheck(
+        message,
+        lastAssistantMessage,
+      ),
+    };
+  }
+
+  resolveNoToolCallResponse(params: {
+    llmContent: string;
+    inferredIntent: TaskIntent;
+    lastSignificantResult: ToolResult | null;
+  }): NoToolCallResponsePolicy {
+    const { llmContent, inferredIntent, lastSignificantResult } = params;
+    if (lastSignificantResult?.actionPerformed) {
+      return { action: "return_as_is", content: llmContent };
+    }
+    if (!this.looksLikeActionSuccess(llmContent)) {
+      return { action: "return_as_is", content: llmContent };
+    }
+    if (
+      lastSignificantResult?.conflictingTasks &&
+      lastSignificantResult.conflictingTasks.length > 0
+    ) {
+      return {
+        action: "correct_with_conflict_context",
+        content: "当前任务存在冲突或重复，请确认或调整后再创建。",
+      };
+    }
+    return {
+      action: "correct_with_not_executed_message",
+      content: this.buildActionNotExecutedMessage(inferredIntent),
+    };
+  }
+
+  private inferTaskIntent(message: string): TaskIntent {
     const text = message.toLowerCase();
     const hasAny = (keywords: string[]) => keywords.some((keyword) => text.includes(keyword));
     const deleteKeywords = ["删除", "移除", "取消任务", "作废", "清除", "delete", "remove"];
@@ -71,14 +118,13 @@ export class HallucinationGuard {
     return null;
   }
 
-  shouldRequireToolCall(message: string): boolean {
-    const intent = this.inferTaskIntent(message);
+  private shouldRequireToolCall(message: string, intent: TaskIntent): boolean {
     if (!intent) return false;
     if (intent === "query" && !this.promptBuilder.hasDateHint(message)) return false;
     return true;
   }
 
-  shouldSkipSemanticConflictCheck(
+  private shouldSkipSemanticConflictCheck(
     message: string,
     lastAssistantMessage?: string | null,
   ): boolean {
@@ -88,7 +134,7 @@ export class HallucinationGuard {
     );
   }
 
-  looksLikeActionSuccess(content: string): boolean {
+  private looksLikeActionSuccess(content: string): boolean {
     const text = content.toLowerCase();
     const successPhrases = [
       "已创建",
@@ -115,7 +161,7 @@ export class HallucinationGuard {
     return successPhrases.some((phrase) => text.includes(phrase));
   }
 
-  buildActionNotExecutedMessage(intent: TaskIntent): string {
+  private buildActionNotExecutedMessage(intent: TaskIntent): string {
     switch (intent) {
       case "create":
         return "我还没有实际创建任务。请确认任务内容后我再创建。";

@@ -93,18 +93,58 @@ export class AgentLoop {
     });
   }
 
+  buildPayloadFromToolResult(
+    toolResult: ToolResult | null,
+  ): AIServiceResult["payload"] {
+    return {
+      task: toolResult?.task,
+      conflictingTasks: toolResult?.conflictingTasks,
+    };
+  }
+
+  async finishChat(params: {
+    userId: number;
+    message: string;
+    content: string;
+    type: AIServiceResult["type"];
+    payload?: AIServiceResult["payload"];
+    persistType?: boolean;
+  }): Promise<AIServiceResult> {
+    const { userId, message, content, type, payload, persistType = true } = params;
+    await this.historyManager.saveMessage(userId, "user", message);
+    if (persistType) {
+      if (payload === undefined) {
+        await this.historyManager.saveMessage(userId, "assistant", content, type);
+      } else {
+        await this.historyManager.saveMessage(
+          userId,
+          "assistant",
+          content,
+          type,
+          payload,
+        );
+      }
+    } else {
+      await this.historyManager.saveMessage(userId, "assistant", content);
+    }
+    if (payload) {
+      return { content, type, payload };
+    }
+    return { content, type };
+  }
+
   async chat(userId: number, message: string): Promise<AIServiceResult> {
     const llm = this.createLLM();
     const systemPrompt = await this.promptBuilder.buildSystemPrompt(userId);
     const chatHistory = await this.historyManager.loadHistory(userId);
     const lastAssistantMessage =
       await this.historyManager.loadLastAssistantMessage(userId);
-    const skipSemanticConflictCheck =
-      this.hallucinationGuard.shouldSkipSemanticConflictCheck(
-        message,
-        lastAssistantMessage?.content,
-      );
-    const inferredIntent = this.hallucinationGuard.inferTaskIntent(message);
+    const userMessagePolicy = this.hallucinationGuard.evaluateUserMessage(
+      message,
+      lastAssistantMessage?.content ?? null,
+    );
+    const { inferredIntent, requireToolCall, skipSemanticConflictCheck } =
+      userMessagePolicy;
     this.debugLog("chat.start", {
       userId,
       messagePreview: this.toContentPreview(message),
@@ -131,9 +171,12 @@ export class AgentLoop {
           hintedSegment: hinted,
           contentPreview: this.toContentPreview(content),
         });
-        await this.historyManager.saveMessage(userId, "user", message);
-        await this.historyManager.saveMessage(userId, "assistant", content, "question");
-        return { content, type: "question" };
+        return this.finishChat({
+          userId,
+          message,
+          content,
+          type: "question",
+        });
       }
     }
 
@@ -145,9 +188,7 @@ export class AgentLoop {
 
     for (let index = 0; index < 10; index++) {
       const toolChoice =
-        index === 0 &&
-        (this.hallucinationGuard.shouldRequireToolCall(message) ||
-          skipSemanticConflictCheck)
+        index === 0 && (requireToolCall || skipSemanticConflictCheck)
           ? "required"
           : undefined;
       this.debugLog("llm.invoke.request", {
@@ -172,37 +213,32 @@ export class AgentLoop {
       });
 
       if (toolCalls.length === 0) {
-        let content = typeof response.content === "string" ? response.content : "";
-        const hasAction = lastSignificantResult?.actionPerformed;
-        if (!hasAction && this.hallucinationGuard.looksLikeActionSuccess(content)) {
+        const rawContent =
+          typeof response.content === "string" ? response.content : "";
+        const noToolCallPolicy = this.hallucinationGuard.resolveNoToolCallResponse({
+          llmContent: rawContent,
+          inferredIntent,
+          lastSignificantResult,
+        });
+        const content = noToolCallPolicy.content;
+        if (noToolCallPolicy.action !== "return_as_is") {
           this.debugLog("llm.response.hallucination", {
             round: index + 1,
             inferredIntent,
-            contentPreview: this.toContentPreview(content),
+            action: noToolCallPolicy.action,
+            rawContentPreview: this.toContentPreview(rawContent),
+            correctedContentPreview: this.toContentPreview(content),
             hasConflictContext:
               !!lastSignificantResult?.conflictingTasks &&
               lastSignificantResult.conflictingTasks.length > 0,
           });
-          if (
-            lastSignificantResult?.conflictingTasks &&
-            lastSignificantResult.conflictingTasks.length > 0
-          ) {
-            content = "当前任务存在冲突或重复，请确认或调整后再创建。";
-          } else {
-            content =
-              this.hallucinationGuard.buildActionNotExecutedMessage(inferredIntent);
-          }
         }
 
         const type =
           lastSignificantResult?.responseType ||
           (lastSignificantResult?.task ? "task_summary" : "text");
+        const payload = this.buildPayloadFromToolResult(lastSignificantResult);
 
-        await this.historyManager.saveMessage(userId, "user", message);
-        await this.historyManager.saveMessage(userId, "assistant", content, type, {
-          task: lastSignificantResult?.task,
-          conflictingTasks: lastSignificantResult?.conflictingTasks,
-        });
         this.debugLog("chat.finish.no_tool_calls", {
           userId,
           type,
@@ -213,14 +249,13 @@ export class AgentLoop {
           contentPreview: this.toContentPreview(content),
         });
 
-        return {
+        return this.finishChat({
+          userId,
+          message,
           content,
           type,
-          payload: {
-            task: lastSignificantResult?.task,
-            conflictingTasks: lastSignificantResult?.conflictingTasks,
-          },
-        };
+          payload,
+        });
       }
 
       for (const toolCall of toolCalls) {
@@ -260,10 +295,6 @@ export class AgentLoop {
         ) {
           const content = toolResult.message;
           const type = toolResult.responseType || "question";
-          await this.historyManager.saveMessage(userId, "user", message);
-          await this.historyManager.saveMessage(userId, "assistant", content, type, {
-            conflictingTasks: toolResult.conflictingTasks,
-          });
           this.debugLog("chat.finish.need_user_confirmation", {
             userId,
             status: toolResult.status,
@@ -271,11 +302,13 @@ export class AgentLoop {
             conflictingTasksCount: toolResult.conflictingTasks?.length || 0,
             contentPreview: this.toContentPreview(content),
           });
-          return {
+          return this.finishChat({
+            userId,
+            message,
             content,
             type,
             payload: { conflictingTasks: toolResult.conflictingTasks },
-          };
+          });
         }
 
         const toolId = toolCall.id || `tool_${Date.now()}_${Math.random()}`;
@@ -290,12 +323,16 @@ export class AgentLoop {
     }
 
     const fallback = "抱歉，处理超时，请重新尝试。";
-    await this.historyManager.saveMessage(userId, "user", message);
-    await this.historyManager.saveMessage(userId, "assistant", fallback);
     this.debugLog("chat.finish.timeout", {
       userId,
       contentPreview: fallback,
     });
-    return { content: fallback, type: "text" };
+    return this.finishChat({
+      userId,
+      message,
+      content: fallback,
+      type: "text",
+      persistType: false,
+    });
   }
 }

@@ -68,7 +68,7 @@ C4Component
     Rel(aiService,         agentLoop,        "委托 chat()")
     Rel(agentLoop,         promptBuilder,    "buildSystemPrompt(); 短路时间校验")
     Rel(agentLoop,         historyManager,   "loadHistory(); loadLastAssistantMessage(); saveMessage()")
-    Rel(agentLoop,         hallucinationGuard, "inferTaskIntent(); shouldRequireToolCall(); shouldSkipSemanticCheck(); looksLikeActionSuccess()")
+    Rel(agentLoop,         hallucinationGuard, "evaluateUserMessage(); resolveNoToolCallResponse()")
     Rel(agentLoop,         toolExecutor,     "executeToolCall(userId, name, args, message, opts)")
     Rel(agentLoop,         toolDefs,         "作为 tools 参数传入 LLM")
     Rel(agentLoop,         llm,              "invoke(messages, tools, toolChoice)", "HTTPS")
@@ -118,13 +118,9 @@ sequenceDiagram
     DB-->>HM: row | null
     HM-->>AL: LastAssistantMessage | null
 
-    AL->>HG: shouldSkipSemanticConflictCheck(message, lastMsg.content)
-    note right of HG: isAffirmative(msg) && didAskForSemanticConfirmation(lastMsg)
-    HG-->>AL: skipSemanticCheck (bool)
-
-    AL->>HG: inferTaskIntent(message)
-    note right of HG: 关键词匹配：delete>complete>update>query>create
-    HG-->>AL: intent (create|query|update|complete|delete|null)
+    AL->>HG: evaluateUserMessage(message, lastMsg.content)
+    note right of HG: 输出 inferredIntent / requireToolCall / skipSemanticCheck
+    HG-->>AL: userPolicy
 
     note over AL,DB: ── 短路检测（绕过 LLM）──
 
@@ -141,22 +137,18 @@ sequenceDiagram
 
     loop index = 0..9
 
-        note over AL: index==0 && (shouldRequireToolCall(msg) || skipSemanticCheck) → toolChoice="required"，否则 auto
+        note over AL: index==0 && (userPolicy.requireToolCall || userPolicy.skipSemanticCheck) → toolChoice="required"，否则 auto
 
         AL->>LLM: invoke([SystemMsg, ...history, HumanMsg, ...ToolMsgs], tools, toolChoice)
         LLM-->>AL: AIMessage { content, tool_calls[] }
 
         alt tool_calls 为空（LLM 直接文字回复）
 
-            AL->>HG: looksLikeActionSuccess(content)
-            alt 有任务意图 && content 含成功措辞 && 无 actionPerformed（幻觉）
-                alt lastSignificantResult 含 conflictingTasks
-                    note over AL: content ← "当前任务存在冲突或重复，请确认或调整后再创建"
-                else
-                    AL->>HG: buildActionNotExecutedMessage(intent)
-                    HG-->>AL: 纠正提示文本
-                    note over AL: content ← 纠正提示
-                end
+            AL->>HG: resolveNoToolCallResponse(content, inferredIntent, lastSignificantResult)
+            alt 返回 correct_with_conflict_context
+                note over AL: content ← "当前任务存在冲突或重复，请确认或调整后再创建"
+            else 返回 correct_with_not_executed_message
+                note over AL: content ← intent 对应未执行提示
             end
 
             AL->>HM: saveMessage(user, message)
@@ -262,7 +254,39 @@ sequenceDiagram
     note over AL,DB: ── 超时兜底（10 轮未命中任何 return）──
     AL->>HM: saveMessage(user, message)
     AL->>HM: saveMessage(assistant, "抱歉，处理超时，请重新尝试")
-    AL-->>U: { type:"text", content:"抱歉，处理超时，请重新尝试" }
+AL-->>U: { type:"text", content:"抱歉，处理超时，请重新尝试" }
+```
+
+### 4.3 State Diagram — chat() 状态与退出路径
+
+> 本图用于重构前后对齐 `AgentLoop.chat()` 的退出路径，优先回答“在哪里 return、为什么 return”。
+
+```mermaid
+stateDiagram-v2
+    [*] --> Init
+
+    Init --> ShortCircuit: 今天 + 时段提示 + 时段已过
+    ShortCircuit --> EndQuestion: 返回 question
+
+    Init --> Loop: 组装 system/history/user 消息
+    Loop --> InvokeLLM: round < 10
+
+    InvokeLLM --> NoToolCalls: tool_calls 为空
+    InvokeLLM --> HasToolCalls: tool_calls 非空
+
+    NoToolCalls --> HallucinationCheck: 判断“未执行却声称成功”
+    HallucinationCheck --> EndTextOrSummary: 无需修正或完成修正后返回
+
+    HasToolCalls --> ExecuteTool: 逐个执行 tool call
+    ExecuteTool --> EndQuestion: status = need_confirmation/conflict
+    ExecuteTool --> Loop: status = success, 继续下一轮
+
+    Loop --> Timeout: round == 10 仍未命中返回
+    Timeout --> EndText: 返回 timeout fallback
+
+    EndQuestion --> [*]
+    EndTextOrSummary --> [*]
+    EndText --> [*]
 ```
 
 ---

@@ -36,6 +36,22 @@ export type TaskIntent =
   | "delete"
   | null;
 
+export interface UserMessagePolicy {
+  inferredIntent: TaskIntent;
+  requireToolCall: boolean;
+  skipSemanticConflictCheck: boolean;
+}
+
+export type NoToolCallResponseAction =
+  | "return_as_is"
+  | "correct_with_conflict_context"
+  | "correct_with_not_executed_message";
+
+export interface NoToolCallResponsePolicy {
+  action: NoToolCallResponseAction;
+  content: string;
+}
+
 export interface LastAssistantMessage {
   content: string;
   type: string;
