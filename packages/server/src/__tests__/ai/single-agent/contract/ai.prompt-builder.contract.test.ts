@@ -57,9 +57,10 @@ describe("PromptBuilder 合约测试", () => {
 
     expect(prompt).toContain("create_task");
     expect(prompt).toContain("query_tasks");
-    expect(prompt).toContain("update_task");
     expect(prompt).toContain("complete_task");
-    expect(prompt).toContain("delete_task");
+    expect(prompt).not.toContain("update_task");
+    expect(prompt).not.toContain("delete_task");
+    expect(prompt).toContain("更新和删除操作不在聊天内执行");
     expect(prompt).toContain("你只处理任务管理相关请求");
   });
 
@@ -72,7 +73,7 @@ describe("PromptBuilder 合约测试", () => {
     expect(prompt).toContain("硬性约束（必须遵守）");
     expect(prompt).toContain("未调用工具前，不得声称");
     expect(prompt).toContain("查询任务时，用户没给日期必须先追问具体日期");
-    expect(prompt).toContain("删除任务前必须先确认将删除的任务信息");
+    expect(prompt).toContain("更新/删除请求必须回复“请到任务列表操作”");
     expect(prompt).toContain("类型契约：");
     expect(prompt).toContain("task_summary");
     expect(prompt).toContain("question");

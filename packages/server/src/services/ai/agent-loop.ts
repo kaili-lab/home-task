@@ -11,7 +11,7 @@ import type { HistoryManager } from "./history-manager";
 import type { PromptBuilder } from "./prompt-builder";
 import type { HallucinationGuard } from "./hallucination-guard";
 import type { ToolExecutor } from "./tool-executor";
-import type { AIServiceResult, ToolResult } from "./types";
+import type { AIServiceResult, TaskIntent, ToolResult } from "./types";
 
 export class AgentLoop {
   constructor(
@@ -102,6 +102,16 @@ export class AgentLoop {
     };
   }
 
+  buildUnsupportedIntentMessage(intent: TaskIntent): string | null {
+    if (intent === "update") {
+      return "AI 聊天暂不支持修改任务，请到任务列表中直接修改。";
+    }
+    if (intent === "delete") {
+      return "AI 聊天暂不支持删除任务，请到任务列表中直接删除。";
+    }
+    return null;
+  }
+
   async finishChat(params: {
     userId: number;
     message: string;
@@ -145,6 +155,8 @@ export class AgentLoop {
     );
     const { inferredIntent, requireToolCall, skipSemanticConflictCheck } =
       userMessagePolicy;
+    const unsupportedIntentMessage =
+      this.buildUnsupportedIntentMessage(inferredIntent);
     this.debugLog("chat.start", {
       userId,
       messagePreview: this.toContentPreview(message),
@@ -155,6 +167,21 @@ export class AgentLoop {
     });
 
     let lastSignificantResult: ToolResult | null = null;
+
+    if (unsupportedIntentMessage) {
+      this.debugLog("chat.rule.shortCircuit", {
+        userId,
+        reason: "unsupported_update_delete_in_chat",
+        inferredIntent,
+        contentPreview: this.toContentPreview(unsupportedIntentMessage),
+      });
+      return this.finishChat({
+        userId,
+        message,
+        content: unsupportedIntentMessage,
+        type: "text",
+      });
+    }
 
     if (message.includes("今天") && this.promptBuilder.hasTimeSegmentHint(message)) {
       const hinted = this.promptBuilder.inferTimeSegmentFromText(message);

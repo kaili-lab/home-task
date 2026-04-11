@@ -93,76 +93,13 @@ export const TOOL_DEFINITIONS = [
   {
     type: "function" as const,
     function: {
-      name: "update_task",
-      description:
-        "当用户想修改任务信息时，按补丁方式更新指定字段；只传需要修改的字段，未传字段保持不变。",
-      parameters: {
-        type: "object",
-        properties: {
-          taskId: { type: "number", description: "要更新的任务 ID" },
-          title: { type: "string", description: "新标题" },
-          description: { type: "string", description: "新描述" },
-          dueDate: {
-            type: "string",
-            description: "新日期，YYYY-MM-DD 格式",
-          },
-          startTime: {
-            type: "string",
-            description: "新开始时间，HH:MM 格式",
-          },
-          endTime: {
-            type: "string",
-            description: "新结束时间，HH:MM 格式",
-          },
-          timeSegment: {
-            type: "string",
-            enum: [
-              "all_day",
-              "early_morning",
-              "morning",
-              "forenoon",
-              "noon",
-              "afternoon",
-              "evening",
-            ],
-            description:
-              "模糊时间段：全天/凌晨/早上/上午/中午/下午/晚上。与 startTime/endTime 互斥。",
-          },
-          priority: {
-            type: "string",
-            enum: ["high", "medium", "low"],
-            description: "新优先级",
-          },
-        },
-        required: ["taskId"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
       name: "complete_task",
       description:
-        "当用户表示任务已完成时，将指定任务标记为已完成；不要改用 update_task 传 status。",
+        "当用户表示任务已完成时，将指定任务标记为已完成。",
       parameters: {
         type: "object",
         properties: {
           taskId: { type: "number", description: "要标记完成的任务 ID" },
-        },
-        required: ["taskId"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "delete_task",
-      description:
-        "当用户明确要求删除任务时，删除指定任务。",
-      parameters: {
-        type: "object",
-        properties: {
-          taskId: { type: "number", description: "要删除的任务 ID" },
         },
         required: ["taskId"],
       },

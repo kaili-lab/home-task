@@ -251,49 +251,6 @@ export class ToolExecutor {
         return { status: "success", message };
       }
 
-      case "update_task": {
-        const {
-          taskId,
-          title,
-          description,
-          dueDate,
-          startTime,
-          endTime,
-          priority,
-          timeSegment,
-        } = toolArgs as {
-          taskId: number;
-          title?: string;
-          description?: string;
-          dueDate?: string;
-          startTime?: string;
-          endTime?: string;
-          priority?: string;
-          timeSegment?: TimeSegment;
-        };
-
-        const task = await taskService.updateTask(taskId, userId, {
-          title,
-          description,
-          dueDate,
-          startTime,
-          endTime,
-          timeSegment,
-          priority: priority as "high" | "medium" | "low" | undefined,
-        });
-
-        const timeInfo = task.startTime
-          ? `，时间${task.startTime}-${task.endTime}`
-          : `（${this.promptBuilder.formatTimeSegmentLabel(task.timeSegment)}）`;
-        return {
-          status: "success",
-          message: `任务更新成功！标题"${task.title}"，日期${task.dueDate}${timeInfo}`,
-          task,
-          actionPerformed: "update",
-          responseType: "task_summary",
-        };
-      }
-
       case "complete_task": {
         const { taskId } = toolArgs as { taskId: number };
         const task = await taskService.updateTaskStatus(taskId, userId, "completed");
@@ -306,33 +263,17 @@ export class ToolExecutor {
         };
       }
 
+      case "update_task":
       case "delete_task": {
-        const { taskId } = toolArgs as { taskId: number };
-
-        if (!this.hasDeleteConfirmation(userMessage)) {
-          return {
-            status: "need_confirmation",
-            message: "删除前请先确认。请回复“确认删除”后我再执行删除。",
-            responseType: "question",
-          };
-        }
-
-        await taskService.deleteTask(taskId, userId);
         return {
-          status: "success",
-          message: "任务已删除。",
-          actionPerformed: "delete",
+          status: "need_confirmation",
+          message: "AI 聊天暂不支持修改或删除任务，请到任务列表中直接操作。",
+          responseType: "text",
         };
       }
 
       default:
         return { status: "error", message: `未知工具：${toolName}` };
     }
-  }
-
-  private hasDeleteConfirmation(text: string): boolean {
-    return /(确认删除|确定删除|同意删除|继续删除|执行删除|删吧|删了吧|删除吧)/.test(
-      text,
-    );
   }
 }

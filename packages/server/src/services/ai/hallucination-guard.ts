@@ -120,6 +120,7 @@ export class HallucinationGuard {
 
   private shouldRequireToolCall(message: string, intent: TaskIntent): boolean {
     if (!intent) return false;
+    if (intent === "update" || intent === "delete") return false;
     if (intent === "query" && !this.promptBuilder.hasDateHint(message)) return false;
     return true;
   }
@@ -166,11 +167,11 @@ export class HallucinationGuard {
       case "create":
         return "我还没有实际创建任务。请确认任务内容后我再创建。";
       case "update":
-        return "我还没有更新任务。请告诉我要修改哪一条任务，或让我先帮你查找。";
+        return "AI 聊天暂不支持修改任务，请到任务列表中直接修改。";
       case "complete":
         return "我还没有完成任务。请告诉我要完成哪一条任务，或让我先帮你查找。";
       case "delete":
-        return "我还没有删除任务。请确认要删除哪一条任务，或让我先帮你查找。";
+        return "AI 聊天暂不支持删除任务，请到任务列表中直接删除。";
       case "query":
         return "我还没有查询任务。请告诉我需要查看的日期。";
       default:

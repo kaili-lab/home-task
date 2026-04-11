@@ -2,7 +2,8 @@
 
 ## 1. 概述
 
-AI Agent 用于通过自然语言完成任务管理（创建、查询、修改、删除、完成）。系统运行在 Cloudflare Workers（Serverless），每次请求独立，上下文由数据库 `messages` 表串联。
+AI Agent 用于通过自然语言完成任务管理（创建、查询、完成）。系统运行在 Cloudflare Workers（Serverless），每次请求独立，上下文由数据库 `messages` 表串联。
+其中“修改/删除”不在 AI Chat 内执行，统一引导到任务列表操作。
 
 核心原则：
 
@@ -29,7 +30,7 @@ Layer 1: Model
   - ChatOpenAI（OpenAI 或 AIHubMix 中转）
 
 Layer 2: Tools
-  - OpenAI JSON Schema 工具（create_task / query_tasks / update_task / delete_task / complete_task）
+  - OpenAI JSON Schema 工具（create_task / query_tasks / complete_task）
 
 Layer 3: Agent 调度
   - 手动 loop：invoke -> 执行 tool -> ToolMessage 回传 -> 再 invoke
@@ -57,7 +58,7 @@ C4Component
         Component(promptBuilder,    "PromptBuilder",     "prompt-builder.ts",     "构建 system prompt（注入日期/时段/群组）；提供时间工具方法")
         Component(historyManager,   "HistoryManager",    "history-manager.ts",    "从 messages 表加载/保存对话历史")
         Component(hallucinationGuard, "HallucinationGuard", "hallucination-guard.ts", "关键词意图推断；LLM 幻觉检测；确认语义判断")
-        Component(toolExecutor,     "ToolExecutor",      "tool-executor.ts",      "执行 5 个 tool call；时间校验；写数据库")
+        Component(toolExecutor,     "ToolExecutor",      "tool-executor.ts",      "执行 3 个 tool call；时间校验；写数据库")
         Component(conflictDetector, "ConflictDetector",  "conflict-detector.ts",  "语义冲突（Dice 系数）+ 时间重叠检测")
         Component(toolDefs,         "TOOL_DEFINITIONS",  "tool-definitions.ts",   "OpenAI JSON Schema 工具定义（静态常量）")
     }
@@ -75,7 +76,7 @@ C4Component
     Rel(hallucinationGuard, promptBuilder,   "hasDateHint()")
     Rel(toolExecutor,      promptBuilder,    "时间工具方法（hasTimeRange/Point/Segment, isAllowed, isPassed, inferSegment…）")
     Rel(toolExecutor,      conflictDetector, "getTasksForDate(); filterTimeConflicts(); findSemanticConflicts(); mergeConflicts()")
-    Rel(toolExecutor,      db,               "TaskService（create / update / delete / query）", "SQL")
+    Rel(toolExecutor,      db,               "TaskService（create / query / updateStatus）", "SQL")
     Rel(conflictDetector,  db,               "TaskService.getTasks(pending, dueDate)", "SQL")
     Rel(historyManager,    db,               "messages 表读写", "SQL")
     Rel(promptBuilder,     db,               "groupUsers + groups 联表查询", "SQL")
@@ -85,7 +86,7 @@ C4Component
 
 ### 4.2 Sequence Diagram — chat() 完整调用时序
 
-> 覆盖所有分支：短路返回 / 幻觉拦截 / 五个 tool 的执行路径 / 冲突/确认早退 / 超时兜底。
+> 覆盖所有分支：短路返回 / 幻觉拦截 / 三个 tool 的执行路径 / 更新删除引导 / 冲突/确认早退 / 超时兜底。
 
 ```mermaid
 sequenceDiagram
@@ -121,6 +122,12 @@ sequenceDiagram
     AL->>HG: evaluateUserMessage(message, lastMsg.content)
     note right of HG: 输出 inferredIntent / requireToolCall / skipSemanticCheck
     HG-->>AL: userPolicy
+
+    alt inferredIntent = update 或 delete
+        AL->>HM: saveMessage(user, message)
+        AL->>HM: saveMessage(assistant, "请到任务列表中修改/删除任务", text)
+        AL-->>U: { type:"text", content }
+    end
 
     note over AL,DB: ── 短路检测（绕过 LLM）──
 
@@ -219,24 +226,10 @@ sequenceDiagram
                     end
                 end
 
-            else toolName = update_task
-                TE->>DB: TaskService.updateTask(taskId, userId, patchFields)
-                DB-->>TE: TaskInfo
-                TE-->>AL: { status:success, task, actionPerformed:update, responseType:task_summary }
-
             else toolName = complete_task
                 TE->>DB: TaskService.updateTaskStatus(taskId, userId, "completed")
                 DB-->>TE: TaskInfo
                 TE-->>AL: { status:success, task, actionPerformed:complete, responseType:task_summary }
-
-            else toolName = delete_task
-                alt userMessage 不含确认关键词（确认删除/删吧/…）
-                    TE-->>AL: { status:need_confirmation, "请回复确认删除后我再执行" }
-                else
-                    TE->>DB: TaskService.deleteTask(taskId, userId)
-                    DB-->>TE: void
-                    TE-->>AL: { status:success, actionPerformed:delete }
-                end
             end
 
             alt toolResult.status = conflict | need_confirmation
@@ -264,6 +257,9 @@ AL-->>U: { type:"text", content:"抱歉，处理超时，请重新尝试" }
 ```mermaid
 stateDiagram-v2
     [*] --> Init
+
+    Init --> UnsupportedIntent: inferredIntent = update/delete
+    UnsupportedIntent --> EndText: 返回任务列表引导文本
 
     Init --> ShortCircuit: 今天 + 时段提示 + 时段已过
     ShortCircuit --> EndQuestion: 返回 question
@@ -333,9 +329,7 @@ stateDiagram-v2
 | --------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `create_task`   | 当用户想新增提醒或待办时，创建一条新任务。成功返回任务信息；有语义重复或时间冲突时返回冲突详情，不执行创建。 | title, dueDate, startTime?, endTime?, timeSegment?, priority?, groupId?, description? |
 | `query_tasks`   | 当用户想查看、列出或筛选任务时，查询任务列表。                                                             | status?, dueDate?, dueDateFrom?, dueDateTo?, priority?                                |
-| `update_task`   | 当用户想修改任务信息时，更新指定任务的字段；只传需要修改的字段，未传字段保持不变。                           | taskId, title?, dueDate?, startTime?, endTime?, timeSegment?, priority?, description? |
-| `complete_task` | 当用户表示任务已完成时，将指定任务标记为已完成。专用于完成操作，无需改用 update_task 传 status 字段。       | taskId                                                                                |
-| `delete_task`   | 当用户明确要求删除任务时，删除指定任务。                                                                   | taskId                                                                                |
+| `complete_task` | 当用户表示任务已完成时，将指定任务标记为已完成。                                                           | taskId                                                                                |
 
 ---
 
@@ -345,8 +339,7 @@ stateDiagram-v2
 - 今天已过的时间段/具体时间范围必须追问确认，禁止自动纠正
 - **有“凌晨/早上/上午/中午/下午/晚上/全天”且无具体时间段时，不追问，直接创建**
 - 给出具体时间但不完整时追问补全
-- 删除前必须确认
-- 修改/删除不确定 ID 先 `query_tasks`
+- 更新/删除请求不在 AI Chat 执行，统一引导到任务列表
 - 仅中文回复，非任务请求礼貌拒绝
 
 ---

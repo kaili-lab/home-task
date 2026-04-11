@@ -115,6 +115,37 @@ describe("AgentLoop", () => {
     expect(promptBuilder.buildSegmentNotAllowedMessage).toHaveBeenCalledWith("morning");
   });
 
+  it.each([
+    ["把任务改到明天", "update", "AI 聊天暂不支持修改任务，请到任务列表中直接修改。"],
+    ["把买菜任务删掉", "delete", "AI 聊天暂不支持删除任务，请到任务列表中直接删除。"],
+  ])("更新/删除意图应直接短路引导: %s", async (message, inferredIntent, expected) => {
+    const { loop, historyManager } = createAgentLoop({
+      hallucinationGuard: {
+        evaluateUserMessage: vi.fn().mockReturnValue({
+          inferredIntent,
+          requireToolCall: false,
+          skipSemanticConflictCheck: false,
+        }),
+      },
+    });
+
+    const result = await loop.chat(7, message);
+
+    expect(result).toEqual({
+      content: expected,
+      type: "text",
+    });
+    expect(langchainMocks.invoke).not.toHaveBeenCalled();
+    expect(historyManager.saveMessage).toHaveBeenNthCalledWith(1, 7, "user", message);
+    expect(historyManager.saveMessage).toHaveBeenNthCalledWith(
+      2,
+      7,
+      "assistant",
+      expected,
+      "text",
+    );
+  });
+
   it("工具成功后应保留 task_summary 和 payload", async () => {
     const task = { id: 11, title: "买菜", dueDate: "2026-04-12" };
     const { loop, historyManager, hallucinationGuard, toolExecutor } =

@@ -17,9 +17,10 @@ describe("HallucinationGuard", () => {
     ["提醒我明天开会", "create", true],
     ["查看明天的任务", "query", true],
     ["查看任务", "query", false],
-    ["把任务改为后天", "update", true],
+    ["把任务改为后天", "update", false],
     ["完成周报", "complete", true],
-    ["删除会议", "delete", true],
+    ["删除会议", "delete", false],
+    ["确认删除 1317", "delete", false],
     ["你好呀", null, false],
   ])("应评估用户消息策略: %s", (message, expectedIntent, expectedRequireToolCall) => {
     const guard = new HallucinationGuard(createPromptBuilder());
@@ -70,6 +71,32 @@ describe("HallucinationGuard", () => {
     ).toEqual({
       action: "correct_with_not_executed_message",
       content: "我还没有实际创建任务。请确认任务内容后我再创建。",
+    });
+  });
+
+  it("更新/删除意图的假成功应改写为任务列表指引", () => {
+    const guard = new HallucinationGuard(createPromptBuilder());
+
+    expect(
+      guard.resolveNoToolCallResponse({
+        llmContent: "任务已修改。",
+        inferredIntent: "update",
+        lastSignificantResult: null,
+      }),
+    ).toEqual({
+      action: "correct_with_not_executed_message",
+      content: "AI 聊天暂不支持修改任务，请到任务列表中直接修改。",
+    });
+
+    expect(
+      guard.resolveNoToolCallResponse({
+        llmContent: "任务已删除。",
+        inferredIntent: "delete",
+        lastSignificantResult: null,
+      }),
+    ).toEqual({
+      action: "correct_with_not_executed_message",
+      content: "AI 聊天暂不支持删除任务，请到任务列表中直接删除。",
     });
   });
 
