@@ -54,13 +54,15 @@ function resolveFrontendUrl(config: Bindings): string {
  */
 export const createAuth = (env: Bindings) => {
   const config = getEnv(env);
+  // 生成 Better Auth 要用的 信任来源列表，Better Auth 自己也需要知道“哪些前端来源是可信的”
   const trustedOrigins = buildTrustedOrigins(config);
+  // 解析出一个前端基础地址，用于邮件中的回调链接（确保指向正确的前端地址）
   const frontendUrl = resolveFrontendUrl(config);
 
   // 为 Better Auth 创建专用的 db 实例
   const db = createDb(config.DATABASE_URL);
 
-  // 创建邮件服务实例
+  // 创建邮件服务实例，这是一个轻量级的对象，每次请求new一个问题不大
   const emailService = new EmailService(config.RESEND_API_KEY);
 
   return betterAuth({
@@ -153,7 +155,11 @@ export const createAuth = (env: Bindings) => {
 
         // 如果 callbackURL 不存在或不是完整 URL（相对路径），则替换为完整的前端 URL
         // 如果存在且是完整 URL，也替换为我们的前端 URL（确保一致性）
-        if (!existingCallbackURL || (!existingCallbackURL.startsWith("http://") && !existingCallbackURL.startsWith("https://"))) {
+        if (
+          !existingCallbackURL ||
+          (!existingCallbackURL.startsWith("http://") &&
+            !existingCallbackURL.startsWith("https://"))
+        ) {
           urlObj.searchParams.set("callbackURL", targetCallbackURL);
         } else {
           // 即使 existingCallbackURL 是完整 URL，也替换为我们的前端 URL（确保指向正确的前端地址）

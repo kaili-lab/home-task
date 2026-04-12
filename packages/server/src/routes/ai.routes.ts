@@ -10,6 +10,7 @@ import { handleServiceError } from "../utils/error-handler";
 import { toUtcIso } from "../utils/time";
 import { isMultiAgentEnabled } from "../utils/env";
 
+// Honojs的设计，使得它既可以作为主 app，也可以当子路由容器
 const aiRoutes = new Hono<{
   Bindings: Bindings;
   Variables: AuthenticatedVariables;

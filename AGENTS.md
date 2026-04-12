@@ -1,5 +1,7 @@
 # Claude Code Project Memory
 
+always response in Chinese
+
 ## Testing
 
 - When running tests, use `pnpm` commands (e.g., `pnpm test`) instead of directly invoking `vitest` or other test runners.

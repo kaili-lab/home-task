@@ -14,167 +14,181 @@ const tasksRoutes = new Hono<{
 }>();
 
 // 创建任务的Zod Schema
-const createTaskSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().min(1),
-  groupId: z.number().int().positive().nullable().optional(),
-  assignedToIds: z.array(z.number().int().positive()).optional(),
-  dueDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable()
-    .optional(),
-  startTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
-    .nullable()
-    .optional(),
-  endTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
-    .nullable()
-    .optional(),
-  timeSegment: z
-    .enum([
-      "all_day",
-      "early_morning",
-      "morning",
-      "forenoon",
-      "noon",
-      "afternoon",
-      "evening",
-    ])
-    .nullable()
-    .optional(),
-  priority: z.enum(["high", "medium", "low"]).optional(),
-  isRecurring: z.boolean().optional(),
-  recurringRule: z
-    .object({
-      freq: z.enum(["daily", "weekly", "monthly"]),
-      interval: z.number().int().positive(),
-      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      endDate: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional(),
-      endAfterOccurrences: z.number().int().positive().optional(),
-      daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
-      dayOfMonth: z.number().int().min(1).max(31).optional(),
-    })
-    .nullable()
-    .optional(),
-}).refine((data) => {
-  // 验证：startTime 和 endTime 必须同时存在或同时为空（二选一）
-  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
-  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+const createTaskSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().min(1),
+    groupId: z.number().int().positive().nullable().optional(),
+    assignedToIds: z.array(z.number().int().positive()).optional(),
+    dueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    startTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+      .nullable()
+      .optional(),
+    endTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+      .nullable()
+      .optional(),
+    timeSegment: z
+      .enum(["all_day", "early_morning", "morning", "forenoon", "noon", "afternoon", "evening"])
+      .nullable()
+      .optional(),
+    priority: z.enum(["high", "medium", "low"]).optional(),
+    isRecurring: z.boolean().optional(),
+    recurringRule: z
+      .object({
+        freq: z.enum(["daily", "weekly", "monthly"]),
+        interval: z.number().int().positive(),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        endAfterOccurrences: z.number().int().positive().optional(),
+        daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+        dayOfMonth: z.number().int().min(1).max(31).optional(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      // 验证：startTime 和 endTime 必须同时存在或同时为空（二选一）
+      const hasStartTime =
+        data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+      const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
 
-  // 要么都有，要么都没有（二选一）
-  return (hasStartTime && hasEndTime) || (!hasStartTime && !hasEndTime);
-}, {
-  message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
-  path: ["startTime"],
-}).refine((data) => {
-  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
-  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
-  const hasTimeSegment = data.timeSegment !== null && data.timeSegment !== undefined;
-  if (hasTimeSegment && (hasStartTime || hasEndTime)) {
-    return false;
-  }
-  return true;
-}, {
-  message: "指定时间段与模糊时间段不可同时存在",
-  path: ["timeSegment"],
-}).refine((data) => {
-  // 验证：非重复任务必须有日期
-  if (!data.isRecurring && (!data.dueDate || data.dueDate === null)) {
-    return false;
-  }
-  return true;
-}, {
-  message: "一次性任务必须指定执行日期",
-  path: ["dueDate"],
-}).refine((data) => {
-  // 验证：群组任务必须有分配人
-  if (data.groupId && (!data.assignedToIds || data.assignedToIds.length === 0)) {
-    return false;
-  }
-  return true;
-}, {
-  message: "群组任务必须至少分配给一个成员",
-  path: ["assignedToIds"],
-});
+      // 要么都有，要么都没有（二选一）
+      return (hasStartTime && hasEndTime) || (!hasStartTime && !hasEndTime);
+    },
+    {
+      message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
+      path: ["startTime"],
+    },
+  )
+  .refine(
+    (data) => {
+      const hasStartTime =
+        data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+      const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+      const hasTimeSegment = data.timeSegment !== null && data.timeSegment !== undefined;
+      if (hasTimeSegment && (hasStartTime || hasEndTime)) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "指定时间段与模糊时间段不可同时存在",
+      path: ["timeSegment"],
+    },
+  )
+  .refine(
+    (data) => {
+      // 验证：非重复任务必须有日期
+      if (!data.isRecurring && (!data.dueDate || data.dueDate === null)) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "一次性任务必须指定执行日期",
+      path: ["dueDate"],
+    },
+  )
+  .refine(
+    (data) => {
+      // 验证：群组任务必须有分配人
+      if (data.groupId && (!data.assignedToIds || data.assignedToIds.length === 0)) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "群组任务必须至少分配给一个成员",
+      path: ["assignedToIds"],
+    },
+  );
 
 // 更新任务的Zod Schema
-const updateTaskSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().optional(),
-  assignedToIds: z.array(z.number().int().positive()).nullable().optional(),
-  dueDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable()
-    .optional(),
-  startTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
-    .nullable()
-    .optional(),
-  endTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
-    .nullable()
-    .optional(),
-  timeSegment: z
-    .enum([
-      "all_day",
-      "early_morning",
-      "morning",
-      "forenoon",
-      "noon",
-      "afternoon",
-      "evening",
-    ])
-    .nullable()
-    .optional(),
-  priority: z.enum(["high", "medium", "low"]).optional(),
-  isRecurring: z.boolean().optional(),
-  recurringRule: z
-    .object({
-      freq: z.enum(["daily", "weekly", "monthly"]),
-      interval: z.number().int().positive(),
-      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      endDate: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional(),
-      endAfterOccurrences: z.number().int().positive().optional(),
-      daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
-      dayOfMonth: z.number().int().min(1).max(31).optional(),
-    })
-    .nullable()
-    .optional(),
-}).refine((data) => {
-  // 验证：startTime 和 endTime 必须同时存在或同时为空（二选一）
-  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
-  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
-  
-  // 要么都有，要么都没有（二选一）
-  return (hasStartTime && hasEndTime) || (!hasStartTime && !hasEndTime);
-}, {
-  message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
-  path: ["startTime"],
-}).refine((data) => {
-  const hasStartTime = data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
-  const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
-  const hasTimeSegment = data.timeSegment !== null && data.timeSegment !== undefined;
-  if (hasTimeSegment && (hasStartTime || hasEndTime)) {
-    return false;
-  }
-  return true;
-}, {
-  message: "指定时间段与模糊时间段不可同时存在",
-  path: ["timeSegment"],
-});
+const updateTaskSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().optional(),
+    assignedToIds: z.array(z.number().int().positive()).nullable().optional(),
+    dueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    startTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+      .nullable()
+      .optional(),
+    endTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+      .nullable()
+      .optional(),
+    timeSegment: z
+      .enum(["all_day", "early_morning", "morning", "forenoon", "noon", "afternoon", "evening"])
+      .nullable()
+      .optional(),
+    priority: z.enum(["high", "medium", "low"]).optional(),
+    isRecurring: z.boolean().optional(),
+    recurringRule: z
+      .object({
+        freq: z.enum(["daily", "weekly", "monthly"]),
+        interval: z.number().int().positive(),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        endAfterOccurrences: z.number().int().positive().optional(),
+        daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+        dayOfMonth: z.number().int().min(1).max(31).optional(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      // 验证：startTime 和 endTime 必须同时存在或同时为空（二选一）
+      const hasStartTime =
+        data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+      const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+
+      // 要么都有，要么都没有（二选一）
+      return (hasStartTime && hasEndTime) || (!hasStartTime && !hasEndTime);
+    },
+    {
+      message: "开始时间和结束时间必须同时填写或同时为空（全天任务）",
+      path: ["startTime"],
+    },
+  )
+  .refine(
+    (data) => {
+      const hasStartTime =
+        data.startTime !== null && data.startTime !== undefined && data.startTime !== "";
+      const hasEndTime = data.endTime !== null && data.endTime !== undefined && data.endTime !== "";
+      const hasTimeSegment = data.timeSegment !== null && data.timeSegment !== undefined;
+      if (hasTimeSegment && (hasStartTime || hasEndTime)) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "指定时间段与模糊时间段不可同时存在",
+      path: ["timeSegment"],
+    },
+  );
 
 // 更新任务状态的Zod Schema
 const updateTaskStatusSchema = z.object({
@@ -237,7 +251,7 @@ tasksRoutes.get("/", async (c) => {
 
     if (groupIdParam !== undefined) {
       if (groupIdParam === "null") {
-        filters.groupId = null; // null 表示个人任务
+        filters.groupId = undefined; // null 表示个人任务
       } else if (groupIdParam === "") {
         filters.groupId = undefined; // 空字符串表示不筛选
       } else {

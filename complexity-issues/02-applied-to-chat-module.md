@@ -48,6 +48,8 @@ packages/server/src/services/ai/
 
 你的 `Single-Agent设计文档.md` 里 C4 L3 图已经把它们的依赖关系画出来了，而且准确。这本身是个好兆头：**你能画出它，说明它还没失控，只是已经到了"必须靠图才能握住"的阶段。**
 
+> **更新（2026-04-11）**：后续 `aa1773e` 已把 single-agent chat 的工具能力从 5 个收敛到 3 个（`create_task` / `query_tasks` / `complete_task`），移除了聊天内 `update_task` / `delete_task` 执行路径；当前 `packages/server/src/services/ai/` 仍是 9 个文件，但总行数已降到约 1423 行。
+
 ---
 
 ## 2. 复杂度分类：三层，不是两层
@@ -103,6 +105,8 @@ packages/server/src/services/ai/
 
 **这一层是最需要警觉的地方**：如果把它们统一叫"本质复杂度"，你会下意识地接受它们，然后继续在它们之上加工程投入。但其中每一条，理论上都有"删掉 / 缩小 / 替换"的空间。对这一层的首要问题不是"怎么让它更可维护"，而是"**这一条我还要不要留？**"
 
+> **更新（2026-04-11）**：`f199d71` 已通过 `docs/adr/0001-agent-deployment-mainline.md` 把这条主线钉住：单 agent 是 Cloudflare 部署主线，多 agent 是 Node / 本地增强路径。因此这里提到的“并存但没说哪条是主线”问题已经修复；现在剩下的是两条路径各自的边界治理，而不是“到底保留哪条”。
+
 **"LLM 幻觉"是个好例子**：你当前用 `HallucinationGuard` 的关键词匹配来事后检测。这当然有用，但更根本的做法可以是"让 LLM 通过 structured output 给出一个带 `action_taken` 字段的 JSON，`action_taken == 'created'` 的路径只能由 tool 走" —— 这是用 **架构** 把可幻觉的表面积压小，而不是用 **guard** 去事后纠正。你可以选择不这样改，但至少在决定保留它之前要知道这个选择的含义。
 
 **"规则散落"是另一个例子**。同一条规则（例如"今天已过下午，不能再创建下午的任务"）目前同时出现在：
@@ -132,6 +136,8 @@ packages/server/src/services/ai/
 每个路径都要自己调 `saveMessage(user)` + `saveMessage(assistant)` + 构造 `AIServiceResult`。这意味着 **"保存用户消息和助手消息"这件事在一个函数里被写了 5 遍**。这是典型的 "change amplification" —— 哪天你要加一个字段，5 个地方都要改。
 
 > 偶然性：中。你可以通过一个"退出包装器"把这个消除 —— 所有退出路径都先 push 到一个 `pendingReturn` 变量，循环结束后统一处理。但这会让控制流更间接。需要权衡。
+
+> **更新（2026-04-11）**：`f199d71` 已引入 `finishChat()` 和 `buildPayloadFromToolResult()`，把多条退出路径中重复的 `saveMessage + 返回值组装` 收敛到了统一收尾逻辑；`aa1773e` 又把更新/删除意图提前短路成“去任务列表操作”的文本返回，进一步减少了高风险分支。所以这条问题已经 **部分修复**，但 `AgentLoop.chat()` 仍然保留多路径 return 的形态。
 
 **实现偶然 B：跨轮状态用栈变量传递**
 
@@ -172,6 +178,8 @@ const policy = guard.classifyLLMResponse({
 
 > 偶然性：高。这个重构我比较推荐做。收益是 AgentLoop 会瘦一大圈，而且"幻觉相关逻辑"的修改都集中在一个地方。
 
+> **更新（2026-04-11）**：`f199d71` 已把 `HallucinationGuard` 的对外接口收敛为 `evaluateUserMessage()` 和 `resolveNoToolCallResponse()`，并将 `shouldRequireToolCall()`、`shouldSkipSemanticConflictCheck()`、`looksLikeActionSuccess()`、`buildActionNotExecutedMessage()` 等细节收回内部辅助逻辑。因此这里说的“浅模块”问题已经 **部分修复**。
+
 ### 2.4 提醒：这是谱系，不是硬边界
 
 上面三层之间经常混着同一件事的不同性质。几个灰色地带：
@@ -206,6 +214,8 @@ const policy = guard.classifyLLMResponse({
 
 写这份 ADR 的过程本身就会逼你把隐性的犹豫显性化 —— 这也是 ADR 的核心价值。**只有钉住这一点，下面三件事的优先级才稳得住。**
 
+> **更新（2026-04-11）**：这一项已经在 `f199d71` 落地，对应文件是 `docs/adr/0001-agent-deployment-mainline.md`。它明确了单 agent 并非待退役遗留，而是 Cloudflare 部署主线；多 agent 则保留为 Node / 本地增强路径。
+
 ### 优先级 2 — 把时间规则做成 table-driven tests
 
 GPT 交叉审核里也提了这一条，我认同。理由：
@@ -238,6 +248,8 @@ describe("时间段规则", () => {
 这张 table 就是规则的 **规格**。之后无论你改 `prompt-builder.ts` 还是 `tool-executor.ts` 里的时间处理代码，都要先问"它还满足这张表吗"。这张表就是你给 AI 修改代码时的边界锚点。
 
 **和优先级 4（Rule Book）的关系**：这张 table 可以被视作 Rule Book 的"可执行版本"。等你将来决定要做 Rule Book 时，只需要把 table 里的 case 抽出来作为常量，prompt-builder 从同一份常量派生 —— 这时你已经有现成的 test fixtures 可用。所以先做 table-driven tests 是一个"起步不贵但兼容未来"的选择。
+
+> **更新（2026-04-11）**：这一项已经在 `8e3978e` 落地，对应文件是 `packages/server/src/__tests__/ai/single-agent/unit/ai.prompt-builder.time-rules.test.ts`。像“今天已过时段”“晚上不能选全天”这类规则已经有了可执行锚点；不过规则仍未收敛成单一事实源，所以它修的是“测试锚点”，不是“规则散落”本身。
 
 ### 优先级 3 — 给 AgentLoop 画一张状态图，盘点退出路径
 
@@ -276,6 +288,8 @@ stateDiagram-v2
 画一次，放在 `docs/Single-Agent设计文档.md` 里紧跟 Sequence Diagram 后面。以后每次你要加一条退出路径，先在图上画，再动代码。**当图不容易画的时候，就是你该重构的信号。**
 
 > 为什么放在第 3 而不是更前？因为如果优先级 1 的 ADR 判定"单 agent 准备退役"，给它画状态图的投入就打折了 —— 更该画的是多 agent 的 Supervisor 状态图。这正是为什么主线决定要先做。
+
+> **更新（2026-04-11）**：这一项也已经落地。当前 `docs/Single-Agent设计文档.md` 已新增 `4.3 State Diagram — chat() 状态与退出路径`，把 unsupported intent、时间短路、tool loop、timeout 等退出路径画了出来。
 
 ### 优先级 4（暂缓）— 大规模 Rule Book / `docs/` 重组
 

@@ -14,44 +14,21 @@ import aiRoutes from "./routes/ai.routes";
 import { DeviceService } from "./services/device.service";
 import { successResponse } from "./utils/route-helpers";
 import { handleServiceError } from "./utils/error-handler";
+import { getAllowedOrigins } from "./utils/cors";
 
+// 这个泛型是为了给Hono对象做类型标注的
+// Bindings告诉 Hono，c.env 里面有哪些环境变量，Variables定义了上下文变量的类型（比如中间件设置的变量）
+// Variables: AppVariables：告诉 Hono，c.set() / c.get() 里面可以存取哪些上下文变量，比如 auth 和 db
 const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 // 临时开关：设备公开任务接口先下线，避免在鉴权方案未完成前暴露任务数据
 const ENABLE_PUBLIC_DEVICE_TASKS_ENDPOINT = false;
-const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173"];
-
-function appendAllowedOrigins(target: Set<string>, value?: string): void {
-  if (!value) return;
-  const candidates = value.split(",");
-  for (const rawCandidate of candidates) {
-    const candidate = rawCandidate.trim();
-    if (!candidate) continue;
-
-    try {
-      target.add(new URL(candidate).origin);
-    } catch {
-      // 忽略非法 URL，避免因为配置错误导致服务启动失败
-    }
-  }
-}
-
-function getAllowedOrigins(env: Bindings): string[] {
-  const origins = new Set(DEFAULT_ALLOWED_ORIGINS);
-  appendAllowedOrigins(origins, env.FRONTEND_URL);
-  appendAllowedOrigins(origins, env.BETTER_AUTH_URL);
-  return Array.from(origins);
-}
 
 // ==================== 全局中间件 ====================
+// 顺序是很重要的：在 Hono 里，中间件也是按你注册的先后顺序执行的
 app.use("*", logger());
 app.use("*", async (c, next) => {
-  // 按请求动态读取环境变量，兼容本地/同域/跨域部署三种场景
-  const allowedOrigins = getAllowedOrigins(c.env);
   const corsMiddleware = cors({
-    origin: (origin) => {
-      if (!origin) return allowedOrigins[0] || DEFAULT_ALLOWED_ORIGINS[0];
-      return allowedOrigins.includes(origin) ? origin : "";
-    },
+    origin: getAllowedOrigins(c.env),
     credentials: true, // 支持 cookies
   });
 
