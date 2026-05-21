@@ -1,4 +1,4 @@
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery, useQueries, keepPreviousData } from "@tanstack/react-query";
 import type { Task } from "@/types";
 import type { TaskInfo, TaskFilters } from "shared";
 import { getTasks } from "@/services/tasks.api";
@@ -40,13 +40,13 @@ export function useTaskList(filters?: TaskFilters) {
       const result = await getTasks(filters);
       return result.tasks.map(taskInfoToTask);
     },
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
 
-  const tasks: Task[] = data || [];
+  const tasks: Task[] = data ?? [];
   const loading = isLoading;
 
   const toggleTaskStatus = (_taskId: number) => {
@@ -85,13 +85,13 @@ export function useTaskListByGroup(
       return result.tasks.map(taskInfoToTask);
     },
     enabled: groupId !== undefined, // 只有在groupId不是undefined时才查询（null表示个人任务，需要查询）
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
 
-  const tasks: Task[] = data || [];
+  const tasks: Task[] = data ?? [];
   const loading = isLoading;
 
   return { tasks, loading, refetch };

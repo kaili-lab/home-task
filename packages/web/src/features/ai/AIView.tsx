@@ -10,6 +10,7 @@ import { formatLocalDateTime } from "@/utils/date";
 export function AIView() {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -18,9 +19,8 @@ export function AIView() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, streamingMessageId]);
 
-  // 页面挂载时加载对话历史
   useEffect(() => {
     const loadHistory = async () => {
       try {
@@ -36,7 +36,6 @@ export function AIView() {
         setMessages(chatMessages);
       } catch (error) {
         console.error("Failed to load chat history:", error);
-        // 如果加载失败，继续，让用户可以开始新对话
       }
     };
     loadHistory();
@@ -45,7 +44,6 @@ export function AIView() {
   const handleSend = async (content: string) => {
     if (!content.trim() || isLoading) return;
 
-    // 添加用户消息
     const userMessage: ChatMessageType = {
       id: Date.now(),
       role: "user",
@@ -55,24 +53,50 @@ export function AIView() {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // 调用 AI 接口
+    const aiMessageId = Date.now() + 1;
+    const aiPlaceholder: ChatMessageType = {
+      id: aiMessageId,
+      role: "ai",
+      content: "",
+      timestamp: formatLocalDateTime(new Date()) ?? "",
+      type: "text",
+    };
+
     setIsLoading(true);
+    setStreamingMessageId(aiMessageId);
+    setMessages((prev) => [...prev, aiPlaceholder]);
+
     try {
-      const response = await chat(content);
-      const aiMessage: ChatMessageType = {
-        id: Date.now() + 1,
-        role: "ai",
-        content: response.content,
-        timestamp: formatLocalDateTime(new Date()) ?? "",
-        type: response.type,
-        payload: response.payload,
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+      await chat(content, {
+        onDelta: ({ content: delta }) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiMessageId ? { ...m, content: m.content + delta } : m,
+            ),
+          );
+        },
+        onDone: ({ response }) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiMessageId
+                ? {
+                    ...m,
+                    content: response.content,
+                    type: response.type,
+                    payload: response.payload,
+                  }
+                : m,
+            ),
+          );
+        },
+      });
     } catch (error) {
+      setMessages((prev) => prev.filter((m) => m.id !== aiMessageId));
       showToastError("AI 回复失败，请重试");
       console.error("Chat error:", error);
     } finally {
       setIsLoading(false);
+      setStreamingMessageId(null);
     }
   };
 
@@ -89,6 +113,8 @@ export function AIView() {
     { label: "下午", range: "14:00-17:59" },
     { label: "晚上", range: "18:00-23:59" },
   ];
+
+  const showTypingIndicator = isLoading && streamingMessageId === null;
 
   return (
     <section className="p-6">
@@ -109,13 +135,12 @@ export function AIView() {
       </div>
 
       <Card className="max-w-2xl mx-auto overflow-hidden">
-        {/* 消息列表 */}
         <div className="h-96 overflow-y-auto p-4 space-y-4 bg-gray-50">
           {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
           ))}
 
-          {isLoading && (
+          {showTypingIndicator && (
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-400 to-purple-500 flex items-center justify-center text-white text-sm shrink-0">
                 🤖
@@ -142,7 +167,6 @@ export function AIView() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 输入框 */}
         <div className="border-t border-gray-200 bg-white">
           <ChatInput onSend={handleSend} onVoice={handleVoiceInput} isLoading={isLoading} />
         </div>

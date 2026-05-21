@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
 import { useApp } from "@/contexts/AppContext";
@@ -161,7 +161,7 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
         };
       },
       enabled: weekRange.from !== "" && weekRange.to !== "",
-      keepPreviousData: true,
+      placeholderData: keepPreviousData,
       refetchOnMount: "always",
       refetchOnWindowFocus: true,
       staleTime: 0,

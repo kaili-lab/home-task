@@ -1,60 +1,58 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryCache,
+  MutationCache,
+} from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { showToastError } from "@/utils/toast";
 import App from "./App.tsx";
 import "./index.css";
-import React from "react";
 
-// 创建 QueryClient 实例
+function handleAuthError(error: unknown, queryClient: QueryClient) {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = error.status as number;
+    if (status === 401) {
+      queryClient.clear();
+      const currentPath = window.location.pathname;
+      if (currentPath !== "/login" && currentPath !== "/register") {
+        window.location.href = `/login?from=${encodeURIComponent(currentPath)}`;
+      }
+    } else if (status === 403) {
+      showToastError("无权限访问");
+      if (window.location.pathname !== "/today") {
+        window.location.href = "/today";
+      }
+    }
+  }
+}
+
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => handleAuthError(error, queryClient),
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      if (error && typeof error === "object" && "status" in error && error.status === 403) {
+        showToastError("无权限访问");
+        return;
+      }
+      handleAuthError(error, queryClient);
+    },
+  }),
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 分钟
+      staleTime: 1000 * 60 * 5,
       retry: 1,
       refetchOnWindowFocus: false,
-      onError: (error: unknown) => {
-        // 处理401/403错误
-        if (error && typeof error === "object" && "status" in error) {
-          const status = error.status as number;
-          if (status === 401) {
-            // 401: 清除缓存并跳转到登录页
-            queryClient.clear();
-            const currentPath = window.location.pathname;
-            if (currentPath !== "/login" && currentPath !== "/register") {
-              window.location.href = `/login?from=${encodeURIComponent(currentPath)}`;
-            }
-          } else if (status === 403) {
-            // 403: 显示错误提示并跳转到首页
-            showToastError("无权限访问");
-            if (window.location.pathname !== "/today") {
-              window.location.href = "/today";
-            }
-          }
-        }
-      },
     },
     mutations: {
       retry: 0,
-      onError: (error: unknown) => {
-        // 处理401/403错误
-        if (error && typeof error === "object" && "status" in error) {
-          const status = error.status as number;
-          if (status === 401) {
-            queryClient.clear();
-            const currentPath = window.location.pathname;
-            if (currentPath !== "/login" && currentPath !== "/register") {
-              window.location.href = `/login?from=${encodeURIComponent(currentPath)}`;
-            }
-          } else if (status === 403) {
-            showToastError("无权限访问");
-          }
-        }
-      },
     },
   },
 });

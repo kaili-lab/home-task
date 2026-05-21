@@ -1,17 +1,24 @@
 import { apiGet, apiPost } from "@/lib/api-client";
-import type { AIChatInput, AIChatResponse, MessageResponse, TaskInfo } from "shared";
+import type {
+  AIChatInput,
+  AIChatResponse,
+  AIChatStreamDeltaEvent,
+  AIChatStreamDoneEvent,
+  AIChatStreamErrorEvent,
+  AIChatStreamStatusEvent,
+  MessageResponse,
+  TaskInfo,
+} from "shared";
 import { formatLocalDateTime } from "@/utils/date";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/+$/, "");
 
 function mapMessageTimes(message: MessageResponse): MessageResponse {
-  // 在接口层统一格式化时间，避免聊天列表展示不一致
   const createdAt = formatLocalDateTime(message.createdAt) ?? message.createdAt;
   return { ...message, createdAt };
 }
 
 function mapTaskInfoTimes(task: TaskInfo): TaskInfo {
-  // 统一任务时间格式，避免 AI 与任务列表显示不一致
   const createdAt = formatLocalDateTime(task.createdAt) ?? task.createdAt;
   const updatedAt = formatLocalDateTime(task.updatedAt) ?? task.updatedAt;
   const completedAt = task.completedAt
@@ -21,7 +28,6 @@ function mapTaskInfoTimes(task: TaskInfo): TaskInfo {
 }
 
 function mapAiChatResponseTimes(response: AIChatResponse): AIChatResponse {
-  // 在接口层统一处理 AI 返回的任务时间，避免下游重复格式化
   if (!response.payload) return response;
   const task = response.payload.task ? mapTaskInfoTimes(response.payload.task) : undefined;
   const conflictingTasks = response.payload.conflictingTasks
@@ -37,6 +43,120 @@ function mapAiChatResponseTimes(response: AIChatResponse): AIChatResponse {
   };
 }
 
+export interface AIChatStreamHandlers {
+  onStatus?: (event: AIChatStreamStatusEvent) => void;
+  onDelta?: (event: AIChatStreamDeltaEvent) => void;
+  onDone?: (event: AIChatStreamDoneEvent) => void;
+  onError?: (event: AIChatStreamErrorEvent) => void;
+}
+
+function parseSseBlock(block: string): { event: string; data: string } | null {
+  const lines = block.split("\n").filter(Boolean);
+  let event = "message";
+  const dataLines: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trim());
+    }
+  }
+  if (dataLines.length === 0) return null;
+  return { event, data: dataLines.join("\n") };
+}
+
+/**
+ * AI 对话（SSE 流式，与 POST /api/ai/chat 一致）
+ */
+export async function chat(
+  message: string,
+  handlers: AIChatStreamHandlers = {},
+): Promise<AIChatResponse> {
+  const data: AIChatInput = { message };
+  const url = API_BASE_URL ? `${API_BASE_URL}/api/ai/chat` : "/api/ai/chat";
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "X-Timezone-Offset": String(new Date().getTimezoneOffset()),
+      "X-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone ?? "",
+    },
+    body: JSON.stringify(data),
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    let errMessage = `请求失败: ${response.statusText}`;
+    try {
+      const json = (await response.json()) as { error?: string };
+      if (json.error) errMessage = json.error;
+    } catch {
+      // 非 JSON 错误体
+    }
+    throw new Error(errMessage);
+  }
+
+  if (!response.body) {
+    throw new Error("响应体为空");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResponse: AIChatResponse | null = null;
+
+  const dispatch = (event: string, rawData: string) => {
+    const parsed = JSON.parse(rawData) as unknown;
+    switch (event) {
+      case "status":
+        handlers.onStatus?.(parsed as AIChatStreamStatusEvent);
+        break;
+      case "delta":
+        handlers.onDelta?.(parsed as AIChatStreamDeltaEvent);
+        break;
+      case "done": {
+        const done = parsed as AIChatStreamDoneEvent;
+        finalResponse = mapAiChatResponseTimes(done.response);
+        handlers.onDone?.({ response: finalResponse });
+        break;
+      }
+      case "error": {
+        const err = parsed as AIChatStreamErrorEvent;
+        handlers.onError?.(err);
+        throw new Error(err.message);
+      }
+      default:
+        break;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const block = parseSseBlock(part.trim());
+      if (block) dispatch(block.event, block.data);
+    }
+  }
+
+  if (buffer.trim()) {
+    const block = parseSseBlock(buffer.trim());
+    if (block) dispatch(block.event, block.data);
+  }
+
+  if (!finalResponse) {
+    throw new Error("未收到完整 AI 回复");
+  }
+
+  return finalResponse;
+}
+
 /**
  * 语音转文字（Whisper）
  */
@@ -49,52 +169,6 @@ export async function transcribeAudio(file: File) {
     formData,
   );
   return response.data;
-}
-
-/**
- * AI对话（支持流式返回）
- * @param message - 消息内容
- * @param audioUrl - 音频URL（可选）
- * @param stream - 是否使用流式返回（默认false）
- * @returns 如果stream=true，返回EventSource，否则返回完整响应
- */
-export async function chat(
-  message: string,
-  audioUrl?: string,
-  stream: boolean = false,
-): Promise<AIChatResponse | EventSource> {
-  const data: AIChatInput = { message };
-  if (audioUrl) {
-    data.audioUrl = audioUrl;
-  }
-
-  if (stream) {
-    // 流式返回默认走同域，跨域场景才拼接绝对地址
-    const url = API_BASE_URL ? `${API_BASE_URL}/api/ai/chat?stream=true` : "/api/ai/chat?stream=true";
-
-    // 注意：EventSource只支持GET请求，但我们需要POST
-    // 所以需要使用fetch的stream模式
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      throw new Error(`请求失败: ${response.statusText}`);
-    }
-
-    // 返回ReadableStream，调用者可以使用EventSource或直接读取stream
-    // 这里简化处理，返回response.body，调用者需要自己处理SSE格式
-    return response.body as unknown as EventSource;
-  }
-
-  // 完整响应
-  const response = await apiPost<AIChatResponse>("/api/ai/chat", data);
-  return mapAiChatResponseTimes(response.data);
 }
 
 /**

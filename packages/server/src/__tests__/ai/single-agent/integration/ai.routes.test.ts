@@ -4,6 +4,7 @@ import aiRoutes from "../../../../routes/ai.routes";
 import type { Bindings } from "../../../../types/bindings";
 import { AIService } from "../../../../services/ai";
 import { MultiAgentService } from "../../../../services/multi-agent";
+import type { AIChatResponse } from "shared";
 
 const { mockAIChat, mockMultiChat } = vi.hoisted(() => ({
   mockAIChat: vi.fn(),
@@ -60,6 +61,20 @@ function createApp() {
   return app;
 }
 
+async function readSseDoneResponse(text: string): Promise<AIChatResponse> {
+  const blocks = text.split("\n\n").filter(Boolean);
+  for (const block of blocks) {
+    const lines = block.split("\n");
+    const eventLine = lines.find((l) => l.startsWith("event:"));
+    const dataLine = lines.find((l) => l.startsWith("data:"));
+    if (eventLine?.includes("done") && dataLine) {
+      const payload = JSON.parse(dataLine.slice(5).trim()) as { response: AIChatResponse };
+      return payload.response;
+    }
+  }
+  throw new Error("SSE 流中未找到 done 事件");
+}
+
 async function requestChat(
   app: ReturnType<typeof createApp>,
   env: Bindings,
@@ -84,7 +99,8 @@ async function requestChat(
     env,
   );
 
-  const data = (await response.json()) as { success: boolean; data?: unknown; error?: string };
+  const text = await response.text();
+  const data = await readSseDoneResponse(text);
   return { response, data };
 }
 
@@ -114,7 +130,8 @@ describe("ai.routes 多 Agent 路由开关", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(data.content).toBe("multi");
     expect(vi.mocked(MultiAgentService)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(MultiAgentService)).toHaveBeenCalledWith(
       expect.anything(),
@@ -136,7 +153,7 @@ describe("ai.routes 多 Agent 路由开关", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
+    expect(data.content).toBe("single");
     expect(vi.mocked(AIService)).toHaveBeenCalledTimes(1);
     expect(mockAIChat).toHaveBeenCalledWith(1, "创建任务");
     expect(vi.mocked(MultiAgentService)).not.toHaveBeenCalled();
@@ -154,10 +171,9 @@ describe("ai.routes 多 Agent 路由开关", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
+    expect(data.content).toBe("single");
     expect(vi.mocked(AIService)).toHaveBeenCalledTimes(1);
     expect(mockAIChat).toHaveBeenCalledWith(1, "创建任务");
     expect(vi.mocked(MultiAgentService)).not.toHaveBeenCalled();
   });
 });
-

@@ -61,7 +61,6 @@ export function ProfileView() {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(currentUser.name);
   const [email, setEmail] = useState(currentUser.email);
-  const [role, setRole] = useState(currentUser.role || "");
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -76,7 +75,6 @@ export function ProfileView() {
   const handleCancel = () => {
     setName(currentUser.name);
     setEmail(currentUser.email);
-    setRole(currentUser.role || "");
     setIsEditing(false);
   };
 

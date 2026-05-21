@@ -88,7 +88,6 @@ export function TaskFormAssignees({
 
   // 个人任务模式：只显示当前用户
   if (groupId === null) {
-    const currentUserName = user?.name || user?.email?.split("@")[0] || "我";
     const currentUserInitials = getUserInitials(user?.name || user?.email || null);
     return (
       <div>

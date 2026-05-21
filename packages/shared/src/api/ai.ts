@@ -30,3 +30,23 @@ export interface AIChatResponse {
     conflictingTasks?: TaskInfo[];
   };
 }
+
+/** SSE：Agent 处理中 */
+export interface AIChatStreamStatusEvent {
+  message: string;
+}
+
+/** SSE：正文增量 */
+export interface AIChatStreamDeltaEvent {
+  content: string;
+}
+
+/** SSE：完整结果（含 type / payload） */
+export interface AIChatStreamDoneEvent {
+  response: AIChatResponse;
+}
+
+/** SSE：错误 */
+export interface AIChatStreamErrorEvent {
+  message: string;
+}

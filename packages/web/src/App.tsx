@@ -11,9 +11,10 @@ import { createTask } from "@/services/tasks.api";
 import { updateCurrentUser } from "@/services/users.api";
 import { showToastSuccess, showToastError } from "@/utils/toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import type { CreateTaskInput } from "shared";
 
 function AppContent() {
-  const { createTaskModal, createGroupModal, groups, setGroups } = useApp();
+  const { createTaskModal, createGroupModal, setGroups } = useApp();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ function AppContent() {
     newGroupId: number;
   } | null>(null);
 
-  const handleCreateTask = async (data: any) => {
+  const handleCreateTask = async (data: CreateTaskInput) => {
     try {
       await createTask(data);
       showToastSuccess("任务创建成功！");
@@ -36,11 +37,7 @@ function AppContent() {
     }
   };
 
-  const handleCreateGroup = async (data: {
-    name: string;
-    icon: string;
-    isDefault: boolean;
-  }) => {
+  const handleCreateGroup = async (data: { name: string; icon: string; isDefault: boolean }) => {
     try {
       // 调用API创建群组
       const newGroup = await createGroup({

@@ -9,6 +9,8 @@ import { getUserId, successResponse } from "../utils/route-helpers";
 import { handleServiceError } from "../utils/error-handler";
 import { toUtcIso } from "../utils/time";
 import { isMultiAgentEnabled } from "../utils/env";
+import { createAIChatSseResponse } from "../utils/ai-chat-sse";
+import type { AIChatResponse } from "shared";
 
 // Honojs的设计，使得它既可以作为主 app，也可以当子路由容器
 const aiRoutes = new Hono<{
@@ -36,17 +38,16 @@ aiRoutes.post("/chat", async (c) => {
     const timezoneOffsetMinutes = tzOffsetHeader ? Number.parseInt(tzOffsetHeader, 10) : 0;
     const tzOffset = Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0;
     const useMultiAgent = isMultiAgentEnabled(c.env);
+    let result: AIChatResponse;
     if (useMultiAgent) {
-      // 通过环境变量切换多 Agent，避免请求级参数绕过部署策略
       const multiService = new MultiAgentService(db, c.env, tzOffset);
-      const result = await multiService.chat(userId, message.trim());
-      return c.json(successResponse(result));
+      result = await multiService.chat(userId, message.trim());
+    } else {
+      const aiService = new AIService(db, c.env, tzOffset, requestId);
+      result = await aiService.chat(userId, message.trim());
     }
 
-    const aiService = new AIService(db, c.env, tzOffset, requestId);
-    const result = await aiService.chat(userId, message.trim());
-
-    return c.json(successResponse(result));
+    return createAIChatSseResponse(result);
   } catch (error) {
     return handleServiceError(c, error);
   }

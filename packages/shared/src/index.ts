@@ -38,4 +38,13 @@ export type { CreateGroupInput, UpdateGroupInput, GroupInfo, GroupDetail } from 
 export type { CreateDeviceInput, DeviceInfo, DeviceTask } from "./api/devices";
 
 // AI相关类型
-export type { MessageInput, MessageResponse, AIChatInput, AIChatResponse } from "./api/ai";
+export type {
+  MessageInput,
+  MessageResponse,
+  AIChatInput,
+  AIChatResponse,
+  AIChatStreamStatusEvent,
+  AIChatStreamDeltaEvent,
+  AIChatStreamDoneEvent,
+  AIChatStreamErrorEvent,
+} from "./api/ai";

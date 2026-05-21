@@ -33,7 +33,8 @@ export interface UpdateTaskInput {
 // 任务筛选器类型
 export interface TaskFilters {
   status?: TaskStatus;
-  groupId?: number;
+  /** number=指定群组；null=个人任务（无群组） */
+  groupId?: number | null;
   assignedTo?: number | "me";
   priority?: Priority;
   excludeRecurringInstances?: boolean; // 是否排除重复任务的子实例

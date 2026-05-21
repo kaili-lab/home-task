@@ -1,19 +1,14 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 
 interface DayGroupSkeletonProps {
   date: Date;
   taskCount?: number;
 }
 
-const weekdayNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-
 export function DayGroupSkeleton({
-  date,
+  date: _date,
   taskCount = 2,
 }: DayGroupSkeletonProps) {
-  const dayOfWeek = date.getDay();
-
   return (
     <div className="rounded-xl">
       {/* Day Header */}
