@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAuth } from "@/hooks/useAuth";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/hooks/useApp";
 import { TodayHeader } from "./TodayHeader";
 import { TaskSection } from "@/components/task/TaskSection";
 import { TaskCard } from "@/components/task/TaskCard";
@@ -16,6 +16,7 @@ import { showToastError, showToastSuccess } from "@/utils/toast";
 import { getTodayLocalDate } from "@/utils/date";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { TaskStatus, Task } from "@/types";
+import type { UpdateTaskInput } from "shared";
 
 export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
   const location = useLocation();
@@ -141,7 +142,7 @@ export function TodayView({ onCreateTask }: { onCreateTask: () => void }) {
   };
 
   // 处理更新任务
-  const handleUpdateTask = async (data: any) => {
+  const handleUpdateTask = async (data: UpdateTaskInput) => {
     if (!editingTask) return;
 
     try {

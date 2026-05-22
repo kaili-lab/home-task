@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/hooks/useApp";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { InviteCodeDisplay } from "@/features/group/InviteCodeDisplay";
 import { GroupMemberList } from "@/features/group/GroupMemberList";

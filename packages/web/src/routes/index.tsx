@@ -14,7 +14,7 @@ import { AIView } from "@/features/ai/AIView";
 import { MyCreatedGroupsView } from "@/features/group/MyCreatedGroupsView";
 import { MyJoinedGroupsView } from "@/features/group/MyJoinedGroupsView";
 import { ProfileView } from "@/features/profile/ProfileView";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/hooks/useApp";
 import { PageLoader } from "@/components/ui/page-loader";
 
 const LandingPage = lazy(() =>

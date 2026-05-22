@@ -1,14 +1,10 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface DayGroupSkeletonProps {
-  date: Date;
   taskCount?: number;
 }
 
-export function DayGroupSkeleton({
-  date: _date,
-  taskCount = 2,
-}: DayGroupSkeletonProps) {
+export function DayGroupSkeleton({ taskCount = 2 }: DayGroupSkeletonProps) {
   return (
     <div className="rounded-xl">
       {/* Day Header */}

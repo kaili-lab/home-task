@@ -24,7 +24,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public response?: ApiErrorResponse
+    public response?: ApiErrorResponse,
   ) {
     super(message);
     this.name = "ApiError";
@@ -41,7 +41,7 @@ export class ApiError extends Error {
  */
 export async function apiRequest<T>(
   endpoint: string,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
 ): Promise<ApiSuccessResponse<T>> {
   const { skipErrorHandling = false, ...fetchOptions } = options;
 
@@ -73,13 +73,10 @@ export async function apiRequest<T>(
   let data: ApiResponse<T>;
   try {
     data = await response.json();
-  } catch (error) {
+  } catch {
     // 如果响应不是JSON格式
     if (!response.ok) {
-      throw new ApiError(
-        `请求失败: ${response.statusText}`,
-        response.status
-      );
+      throw new ApiError(`请求失败: ${response.statusText}`, response.status);
     }
     throw new ApiError("响应格式错误", response.status);
   }
@@ -87,11 +84,7 @@ export async function apiRequest<T>(
   // 处理错误响应
   if (!data.success) {
     const errorResponse = data as ApiErrorResponse;
-    const error = new ApiError(
-      errorResponse.error || "请求失败",
-      response.status,
-      errorResponse
-    );
+    const error = new ApiError(errorResponse.error || "请求失败", response.status, errorResponse);
 
     // 处理401未授权错误
     if (response.status === 401) {
@@ -124,11 +117,7 @@ export function apiGet<T>(endpoint: string, options?: RequestOptions) {
 /**
  * POST请求
  */
-export function apiPost<T>(
-  endpoint: string,
-  body?: unknown,
-  options?: RequestOptions
-) {
+export function apiPost<T>(endpoint: string, body?: unknown, options?: RequestOptions) {
   return apiRequest<T>(endpoint, {
     ...options,
     method: "POST",
@@ -139,11 +128,7 @@ export function apiPost<T>(
 /**
  * PATCH请求
  */
-export function apiPatch<T>(
-  endpoint: string,
-  body?: unknown,
-  options?: RequestOptions
-) {
+export function apiPatch<T>(endpoint: string, body?: unknown, options?: RequestOptions) {
   return apiRequest<T>(endpoint, {
     ...options,
     method: "PATCH",

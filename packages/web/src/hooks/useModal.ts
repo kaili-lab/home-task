@@ -9,3 +9,5 @@ export function useModal(defaultOpen = false) {
 
   return { isOpen, open, close, toggle };
 }
+
+export type ModalController = ReturnType<typeof useModal>;

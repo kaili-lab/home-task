@@ -22,23 +22,36 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/hooks/useApp";
 import { useAuth } from "@/hooks/useAuth";
 import { TaskFormRecurring } from "./TaskFormRecurring";
 import { TaskFormAssignees } from "./TaskFormAssignees";
 import type { Priority, RecurringRule, Task, TimeSegment } from "@/types";
 import { showToastError } from "@/utils/toast";
 import { formatLocalDate, getTodayLocalDate } from "@/utils/date";
+import {
+  getCurrentTimeSegment,
+  getStartOfToday,
+  isSegmentDisabledForToday,
+  isTodayDueDate,
+} from "@/utils/time-segment";
+import type { CreateTaskInput } from "shared";
 
 interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: CreateTaskInput) => void;
   editTask?: Task;
   initialMode?: "view" | "edit";
 }
 
-export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMode }: CreateTaskModalProps) {
+export function CreateTaskModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  editTask,
+  initialMode,
+}: CreateTaskModalProps) {
   // 内部模式状态：create | edit | view
   const [internalMode, setInternalMode] = useState<"create" | "edit" | "view">("create");
 
@@ -76,63 +89,9 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
   const [assignedToIds, setAssignedToIds] = useState<number[]>([]);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-  // 获取今天的日期（只包含年月日，不包含时间）
-  const getToday = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
-  };
-
-  const getCurrentTimeSegment = (): TimeSegment => {
-    const hour = new Date().getHours();
-    if (hour >= 0 && hour < 6) return "early_morning";
-    if (hour >= 6 && hour < 9) return "morning";
-    if (hour >= 9 && hour < 12) return "forenoon";
-    if (hour >= 12 && hour < 14) return "noon";
-    if (hour >= 14 && hour < 18) return "afternoon";
-    if (hour >= 18 && hour <= 23) return "evening";
-    return "morning";
-  };
-
-  const getSegmentOrder = (segment: TimeSegment) => {
-    switch (segment) {
-      case "early_morning":
-        return 0;
-      case "morning":
-        return 1;
-      case "forenoon":
-        return 2;
-      case "noon":
-        return 3;
-      case "afternoon":
-        return 4;
-      case "evening":
-        return 5;
-      case "all_day":
-      default:
-        return -1;
-    }
-  };
-
-  const isTodaySelected = () => {
-    if (!dueDate) return false;
-    const today = getToday();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
-    return dueDate === `${yyyy}-${mm}-${dd}`;
-  };
-
-  const isSegmentDisabled = (segment: TimeSegment) => {
-    if (!isTodaySelected()) return false;
-    const current = getCurrentTimeSegment();
-    if (segment === "all_day") return current === "evening";
-    return getSegmentOrder(segment) < getSegmentOrder(current);
-  };
-
   // 禁用今天之前的日期
   const isDateDisabled = (date: Date) => {
-    const today = getToday();
+    const today = getStartOfToday();
     const selectedDate = new Date(date);
     selectedDate.setHours(0, 0, 0, 0);
     return selectedDate < today;
@@ -192,8 +151,8 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
 
   useEffect(() => {
     if (timeMode !== "segment") return;
-    if (!isTodaySelected()) return;
-    if (isSegmentDisabled(timeSegment)) {
+    if (!isTodayDueDate(dueDate)) return;
+    if (isSegmentDisabledForToday(timeSegment, dueDate)) {
       setTimeSegment(getCurrentTimeSegment());
     }
   }, [timeMode, dueDate, timeSegment]);
@@ -247,7 +206,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
       title,
       description: description || undefined,
       // 重复任务不传 dueDate（后端会设为 NULL）
-      dueDate: isRecurring ? undefined : (dueDate || undefined),
+      dueDate: isRecurring ? undefined : dueDate || undefined,
       startTime: timeMode === "range" ? startTime || undefined : undefined,
       endTime: timeMode === "range" ? endTime || undefined : undefined,
       timeSegment: timeMode === "segment" ? timeSegment : undefined,
@@ -256,10 +215,12 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
       assignedToIds: assignedToIds.length > 0 ? assignedToIds : undefined,
       source: "human" as const,
       isRecurring,
-      recurringRule: isRecurring ? {
-        ...recurringRule,
-        startDate: dueDate, // 使用选择的日期作为 startDate
-      } : undefined,
+      recurringRule: isRecurring
+        ? {
+            ...recurringRule,
+            startDate: dueDate, // 使用选择的日期作为 startDate
+          }
+        : undefined,
     };
     onSubmit(taskData);
     // Reset form
@@ -306,7 +267,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
             <Label>任务归属</Label>
             <RadioGroup
               value={taskType}
-              onValueChange={(v: any) => handleTaskTypeChange(v)}
+              onValueChange={(v: string) => handleTaskTypeChange(v as "group" | "personal")}
               className="flex gap-3 mt-2"
               disabled={internalMode === "view"}
             >
@@ -325,16 +286,22 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
           {taskType === "group" && (
             <div>
               <Label>选择群组</Label>
-              <Select value={groupId} onValueChange={handleGroupChange} disabled={internalMode === "view"}>
+              <Select
+                value={groupId}
+                onValueChange={handleGroupChange}
+                disabled={internalMode === "view"}
+              >
                 <SelectTrigger className="mt-2">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {groups.filter((g) => g.role === "owner" || g.role === "member").map((group) => (
-                    <SelectItem key={group.id} value={String(group.id)}>
-                      {group.icon} {group.name} {group.role === "owner" && "(群主)"}
-                    </SelectItem>
-                  ))}
+                  {groups
+                    .filter((g) => g.role === "owner" || g.role === "member")
+                    .map((group) => (
+                      <SelectItem key={group.id} value={String(group.id)}>
+                        {group.icon} {group.name} {group.role === "owner" && "(群主)"}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -403,7 +370,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
               <Label className="mb-2">时间类型</Label>
               <RadioGroup
                 value={timeMode}
-                onValueChange={(v: any) => {
+                onValueChange={(v: string) => {
                   const nextMode = v as "segment" | "range";
                   setTimeMode(nextMode);
                   if (nextMode === "segment") {
@@ -435,28 +402,28 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all_day" disabled={isSegmentDisabled("all_day")}>
+                      <SelectItem value="all_day" disabled={isSegmentDisabledForToday("all_day", dueDate)}>
                         全天
                       </SelectItem>
                       <SelectItem
                         value="early_morning"
-                        disabled={isSegmentDisabled("early_morning")}
+                        disabled={isSegmentDisabledForToday("early_morning", dueDate)}
                       >
                         凌晨（00:00-05:59）
                       </SelectItem>
-                      <SelectItem value="morning" disabled={isSegmentDisabled("morning")}>
+                      <SelectItem value="morning" disabled={isSegmentDisabledForToday("morning", dueDate)}>
                         早上（06:00-08:59）
                       </SelectItem>
-                      <SelectItem value="forenoon" disabled={isSegmentDisabled("forenoon")}>
+                      <SelectItem value="forenoon" disabled={isSegmentDisabledForToday("forenoon", dueDate)}>
                         上午（09:00-11:59）
                       </SelectItem>
-                      <SelectItem value="noon" disabled={isSegmentDisabled("noon")}>
+                      <SelectItem value="noon" disabled={isSegmentDisabledForToday("noon", dueDate)}>
                         中午（12:00-13:59）
                       </SelectItem>
-                      <SelectItem value="afternoon" disabled={isSegmentDisabled("afternoon")}>
+                      <SelectItem value="afternoon" disabled={isSegmentDisabledForToday("afternoon", dueDate)}>
                         下午（14:00-17:59）
                       </SelectItem>
-                      <SelectItem value="evening" disabled={isSegmentDisabled("evening")}>
+                      <SelectItem value="evening" disabled={isSegmentDisabledForToday("evening", dueDate)}>
                         晚上（18:00-23:59）
                       </SelectItem>
                     </SelectContent>
@@ -494,7 +461,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
             <Label>优先级</Label>
             <RadioGroup
               value={priority}
-              onValueChange={(v: any) => setPriority(v)}
+              onValueChange={(v) => setPriority(v as Priority)}
               className="flex gap-3 mt-2"
               disabled={internalMode === "view"}
             >
@@ -527,8 +494,8 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
           />
 
           {/* 分配人员 */}
-          {internalMode !== "view" && (
-            taskType === "group" && groupId ? (
+          {internalMode !== "view" &&
+            (taskType === "group" && groupId ? (
               <TaskFormAssignees
                 selected={assignedToIds}
                 onChange={setAssignedToIds}
@@ -542,8 +509,7 @@ export function CreateTaskModal({ isOpen, onClose, onSubmit, editTask, initialMo
                 groupId={null}
                 currentUserId={user?.id || 0}
               />
-            ) : null
-          )}
+            ) : null)}
         </div>
 
         <DialogFooter>

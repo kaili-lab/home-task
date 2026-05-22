@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { AppProvider, useApp, userGroupToGroup } from "@/contexts/AppContext";
+import { AppProvider } from "@/contexts/AppContext";
+import { useApp } from "@/hooks/useApp";
+import { userGroupToGroup } from "@/lib/user-group";
 import { AppRoutes } from "@/routes";
 import { CreateTaskModal } from "@/features/task/CreateTaskModal";
 import { CreateGroupModal } from "@/features/group/CreateGroupModal";

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { useTaskListByGroup } from "@/hooks/useTaskList";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/hooks/useApp";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { DayGroup } from "./DayGroup";
@@ -13,7 +13,7 @@ import { updateTaskStatus, deleteTask, updateTask } from "@/services/tasks.api";
 import { showToastError, showToastSuccess } from "@/utils/toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getTasks } from "@/services/tasks.api";
-import type { TaskInfo } from "shared";
+import type { TaskInfo, UpdateTaskInput } from "shared";
 import type { TaskStatus, Task, Group } from "@/types";
 
 interface WeekViewProps {
@@ -58,7 +58,9 @@ function parseWeekOffset(value: string | null): number {
 export function WeekView({ onCreateTask }: WeekViewProps) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [weekOffset, setWeekOffset] = useState(() => parseWeekOffset(searchParams.get("weekOffset")));
+  const [weekOffset, setWeekOffset] = useState(() =>
+    parseWeekOffset(searchParams.get("weekOffset")),
+  );
   const queryClient = useQueryClient();
   const { groups } = useApp();
   const { user } = useAuth();
@@ -148,7 +150,12 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   // 查询其他群组的任务（使用useQueries）
   const otherGroupQueries = useQueries({
     queries: otherGroups.map((group) => ({
-      queryKey: ["tasks", "group", group.id, { dueDateFrom: weekRange.from, dueDateTo: weekRange.to }],
+      queryKey: [
+        "tasks",
+        "group",
+        group.id,
+        { dueDateFrom: weekRange.from, dueDateTo: weekRange.to },
+      ],
       queryFn: async () => {
         const result = await getTasks({
           groupId: group.id,
@@ -162,7 +169,7 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
       },
       enabled: weekRange.from !== "" && weekRange.to !== "",
       placeholderData: keepPreviousData,
-      refetchOnMount: "always",
+      refetchOnMount: "always" as const,
       refetchOnWindowFocus: true,
       staleTime: 0,
     })),
@@ -346,7 +353,7 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
   };
 
   // 处理更新任务
-  const handleUpdateTask = async (data: any) => {
+  const handleUpdateTask = async (data: UpdateTaskInput) => {
     if (!editingTask) return;
     try {
       await updateTask(editingTask.id, data);
@@ -407,7 +414,7 @@ export function WeekView({ onCreateTask }: WeekViewProps) {
           return (
             <div key={dateStr} ref={isToday ? todayGroupRef : undefined}>
               {loading ? (
-                <DayGroupSkeleton date={date} taskCount={2} />
+                <DayGroupSkeleton taskCount={2} />
               ) : (
                 <DayGroup
                   date={date}

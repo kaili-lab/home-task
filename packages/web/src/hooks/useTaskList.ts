@@ -49,11 +49,7 @@ export function useTaskList(filters?: TaskFilters) {
   const tasks: Task[] = data ?? [];
   const loading = isLoading;
 
-  const toggleTaskStatus = (_taskId: number) => {
-    // TODO: 实现任务状态切换的API调用
-  };
-
-  return { tasks, loading, toggleTaskStatus, refetch };
+  return { tasks, loading, refetch };
 }
 
 /**
@@ -63,13 +59,13 @@ export function useTaskList(filters?: TaskFilters) {
  */
 export function useTaskListByGroup(
   groupId: number | null | undefined,
-  dateFilter?: { dueDate?: string; dueDateFrom?: string; dueDateTo?: string }
+  dateFilter?: { dueDate?: string; dueDateFrom?: string; dueDateTo?: string },
 ) {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["tasks", "group", groupId, dateFilter],
     queryFn: async () => {
       const filters: TaskFilters = { groupId: groupId === undefined ? undefined : groupId };
-      
+
       // 添加日期过滤
       if (dateFilter?.dueDate) {
         filters.dueDate = dateFilter.dueDate;
@@ -80,7 +76,7 @@ export function useTaskListByGroup(
       if (dateFilter?.dueDateTo) {
         filters.dueDateTo = dateFilter.dueDateTo;
       }
-      
+
       const result = await getTasks(filters);
       return result.tasks.map(taskInfoToTask);
     },
