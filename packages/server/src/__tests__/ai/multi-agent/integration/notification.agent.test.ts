@@ -20,7 +20,7 @@ describe("notification.agent - 集成", () => {
           ],
         }),
         new AIMessage({ content: "提醒已安排" }),
-      ],
+      ] as any,
     });
 
     const agent = createNotificationAgent(llm as any);

@@ -82,7 +82,7 @@ describe("task.agent - 集成", () => {
           ],
         }),
         new AIMessage({ content: "任务已创建" }),
-      ],
+      ] as any,
     });
 
     const agent = createTaskAgent(llm as any, 0);
@@ -112,7 +112,7 @@ describe("task.agent - 集成", () => {
           ],
         }),
         new AIMessage({ content: "已完成" }),
-      ],
+      ] as any,
     });
 
     const agent = createTaskAgent(llm as any, 0);
@@ -143,7 +143,7 @@ describe("task.agent - 集成", () => {
           ],
         }),
         new AIMessage({ content: "创建任务时出错了" }),
-      ],
+      ] as any,
     });
 
     const agent = createTaskAgent(llm as any, 0);

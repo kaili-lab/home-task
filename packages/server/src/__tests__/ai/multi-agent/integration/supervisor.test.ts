@@ -29,7 +29,7 @@ describe("supervisor - 路由测试", () => {
         }),
         new AIMessage({ content: "任务已处理" }),
         new AIMessage({ content: "已完成" }),
-      ],
+      ] as any,
     });
 
     const graph = buildSupervisorGraph(llm as any, 0);
@@ -50,7 +50,7 @@ describe("supervisor - 路由测试", () => {
         }),
         new AIMessage({ content: "日程已返回" }),
         new AIMessage({ content: "好的" }),
-      ],
+      ] as any,
     });
 
     const graph = buildSupervisorGraph(llm as any, 0);
@@ -71,7 +71,7 @@ describe("supervisor - 路由测试", () => {
         }),
         new AIMessage({ content: "天气已返回" }),
         new AIMessage({ content: "好的" }),
-      ],
+      ] as any,
     });
 
     const graph = buildSupervisorGraph(llm as any, 0);
@@ -85,7 +85,7 @@ describe("supervisor - 路由测试", () => {
 
   it("讲个笑话 -> 不路由到任何 Agent", async () => {
     const llm = new FakeListChatModel({
-      responses: [new AIMessage({ content: "抱歉，我只能处理任务和日程相关需求。" })],
+      responses: [new AIMessage({ content: "抱歉，我只能处理任务和日程相关需求。" })] as any,
     });
 
     const graph = buildSupervisorGraph(llm as any, 0);
@@ -111,7 +111,7 @@ describe("supervisor - 路由测试", () => {
         }),
         new AIMessage({ content: "任务已处理" }),
         new AIMessage({ content: "全部完成" }),
-      ],
+      ] as any,
     });
 
     const graph = buildSupervisorGraph(llm as any, 0);
@@ -136,7 +136,7 @@ describe("supervisor - 错误处理测试", () => {
         }),
         new AIMessage({ content: "处理出错" }),
         new AIMessage({ content: "抱歉出了点问题" }),
-      ],
+      ] as any,
     });
 
     const graph = buildSupervisorGraph(llm as any, 0);
@@ -160,7 +160,7 @@ describe("supervisor - 错误处理测试", () => {
         }),
         new AIMessage({ content: "已处理" }),
         new AIMessage({ content: "完成" }),
-      ],
+      ] as any,
     });
 
     const graph = buildSupervisorGraph(llm as any, 0);

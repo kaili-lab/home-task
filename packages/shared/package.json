@@ -2,8 +2,14 @@
   "name": "shared",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     ".": "./src/index.ts"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }

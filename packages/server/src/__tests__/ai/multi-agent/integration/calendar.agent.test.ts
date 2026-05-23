@@ -20,7 +20,7 @@ describe("calendar.agent - 集成", () => {
           ],
         }),
         new AIMessage({ content: "空闲时间已返回" }),
-      ],
+      ] as any,
     });
 
     const agent = createCalendarAgent(llm as any, 0);

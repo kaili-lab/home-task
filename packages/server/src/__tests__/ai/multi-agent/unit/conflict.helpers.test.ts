@@ -28,7 +28,7 @@ function makeTask(overrides: Partial<TaskInfo>): TaskInfo {
     startTime: overrides.startTime ?? null,
     endTime: overrides.endTime ?? null,
     timeSegment: overrides.timeSegment ?? "all_day",
-    source: overrides.source ?? "manual",
+    source: overrides.source ?? "human",
     isRecurring: overrides.isRecurring ?? false,
     recurringRule: overrides.recurringRule ?? null,
     recurringParentId: overrides.recurringParentId ?? null,

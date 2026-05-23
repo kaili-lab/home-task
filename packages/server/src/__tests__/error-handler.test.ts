@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { handleServiceError, ErrorCode } from "../utils/error-handler";
+import { handleServiceError, ErrorCode, type ErrorResponse } from "../utils/error-handler";
+
+type MockResult = { data: ErrorResponse; status: number };
 
 function createMockContext(nodeEnv: "production" | "development" = "development") {
   return {
@@ -8,10 +10,14 @@ function createMockContext(nodeEnv: "production" | "development" = "development"
   } as any;
 }
 
+function callHandler(c: ReturnType<typeof createMockContext>, error: Error): MockResult {
+  return handleServiceError(c, error) as unknown as MockResult;
+}
+
 describe("error-handler", () => {
   it("生产环境遇到未知错误应隐藏内部信息", () => {
     const c = createMockContext("production");
-    const result = handleServiceError(c, new Error("database connection failed"));
+    const result = callHandler(c, new Error("database connection failed"));
 
     expect(result.status).toBe(500);
     expect(result.data).toMatchObject({
@@ -23,7 +29,7 @@ describe("error-handler", () => {
 
   it("开发环境遇到未知错误应保留原始错误信息", () => {
     const c = createMockContext("development");
-    const result = handleServiceError(c, new Error("database connection failed"));
+    const result = callHandler(c, new Error("database connection failed"));
 
     expect(result.status).toBe(500);
     expect(result.data.error).toBe("database connection failed");
@@ -31,7 +37,7 @@ describe("error-handler", () => {
 
   it("应将英文 not found 映射为 404", () => {
     const c = createMockContext("production");
-    const result = handleServiceError(c, new Error("Task not found."));
+    const result = callHandler(c, new Error("Task not found."));
 
     expect(result.status).toBe(404);
     expect(result.data).toMatchObject({
@@ -42,7 +48,7 @@ describe("error-handler", () => {
 
   it("应将权限类错误映射为 403", () => {
     const c = createMockContext("production");
-    const result = handleServiceError(c, new Error("You do not have permission to view this task."));
+    const result = callHandler(c, new Error("You do not have permission to view this task."));
 
     expect(result.status).toBe(403);
     expect(result.data.code).toBe(ErrorCode.FORBIDDEN);
@@ -50,7 +56,7 @@ describe("error-handler", () => {
 
   it("应将冲突类错误映射为 409", () => {
     const c = createMockContext("production");
-    const result = handleServiceError(c, new Error("duplicate key value violates unique constraint"));
+    const result = callHandler(c, new Error("duplicate key value violates unique constraint"));
 
     expect(result.status).toBe(409);
     expect(result.data.code).toBe(ErrorCode.CONFLICT);
@@ -58,7 +64,7 @@ describe("error-handler", () => {
 
   it("应将限流类错误映射为 429", () => {
     const c = createMockContext("production");
-    const result = handleServiceError(c, new Error("Too many requests, please slow down."));
+    const result = callHandler(c, new Error("Too many requests, please slow down."));
 
     expect(result.status).toBe(429);
     expect(result.data.code).toBe(ErrorCode.TOO_MANY_REQUESTS);
@@ -66,7 +72,7 @@ describe("error-handler", () => {
 
   it("应将未授权错误映射为 401", () => {
     const c = createMockContext("production");
-    const result = handleServiceError(c, new Error("Unauthorized"));
+    const result = callHandler(c, new Error("Unauthorized"));
 
     expect(result.status).toBe(401);
     expect(result.data.code).toBe(ErrorCode.UNAUTHORIZED);

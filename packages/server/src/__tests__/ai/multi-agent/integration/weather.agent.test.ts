@@ -20,7 +20,7 @@ describe("weather.agent - 集成", () => {
           ],
         }),
         new AIMessage({ content: "天气已返回" }),
-      ],
+      ] as any,
     });
 
     const agent = createWeatherAgent(llm as any);
