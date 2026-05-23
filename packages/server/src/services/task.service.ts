@@ -1,4 +1,4 @@
-﻿import { eq, and, or, isNull, isNotNull, inArray, desc, asc, count, gte, lte } from "drizzle-orm";
+﻿import { eq, and, or, isNull, isNotNull, inArray, desc, count, gte, lte } from "drizzle-orm";
 import type { DbInstance } from "../db/db";
 import { tasks, groupUsers, users, groups, taskAssignments } from "../db/schema";
 import { toUtcIso } from "../utils/time";
@@ -405,7 +405,7 @@ export class TaskService {
   private calculateInstanceDates(rule: RecurringRule): string[] {
     const dates: string[] = [];
     const startDate = new Date(rule.startDate);
-    let currentDate = new Date(startDate);
+    const currentDate = new Date(startDate);
 
     // 确定结束条件
     const maxIterations = rule.endAfterOccurrences || 365;
@@ -419,15 +419,17 @@ export class TaskService {
           shouldAdd = true;
           break;
 
-        case "weekly":
+        case "weekly": {
           const dayOfWeek = currentDate.getDay();
           shouldAdd = rule.daysOfWeek?.includes(dayOfWeek) || false;
           break;
+        }
 
-        case "monthly":
+        case "monthly": {
           const dayOfMonth = currentDate.getDate();
           shouldAdd = dayOfMonth === rule.dayOfMonth;
           break;
+        }
       }
 
       if (shouldAdd) {

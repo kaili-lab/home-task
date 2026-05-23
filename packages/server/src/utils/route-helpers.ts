@@ -1,6 +1,3 @@
-
-import type { Context } from "hono";
-
 /**
  * Session 类型（简化定义）
  * 实际类型由 Better Auth 提供

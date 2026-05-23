@@ -116,7 +116,7 @@ ${this.appName} 团队`,
    */
   async sendVerificationEmailForAuth(
     { user, url }: { user: { email: string; name?: string | null }; url: string; token: string },
-    request?: Request,
+    _request?: Request,
   ): Promise<void> {
     const userName = user.name || user.email.split("@")[0];
     const result = await this.sendVerificationEmail(user.email, userName, url);
@@ -135,7 +135,7 @@ ${this.appName} 团队`,
    */
   async sendPasswordResetEmailForAuth(
     { user, url }: { user: { email: string; name?: string | null }; url: string; token: string },
-    request?: Request,
+    _request?: Request,
   ): Promise<void> {
     const userName = user.name || user.email.split("@")[0];
     const result = await this.sendPasswordResetEmail(user.email, userName, url);

@@ -262,7 +262,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   }),
 }));
 
-export const groupsRelations = relations(groups, ({ many, one }) => ({
+export const groupsRelations = relations(groups, ({ many }) => ({
   members: many(groupUsers),
   tasks: many(tasks),
   devices: many(devices),

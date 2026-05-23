@@ -29,19 +29,19 @@ export class GroupService {
    */
   async createGroup(ownerId: number, data: CreateGroupInput): Promise<GroupInfo> {
     // 生成唯一邀请码（如果冲突则重试）
-    let inviteCode: string;
+    let inviteCode = "";
     let attempts = 0;
-    do {
+    while (attempts <= 10) {
       inviteCode = generateInviteCode();
       const existing = await this.db.query.groups.findFirst({
         where: eq(groups.inviteCode, inviteCode),
       });
       if (!existing) break;
       attempts++;
-      if (attempts > 10) {
-        throw new Error("无法生成唯一邀请码，请重试");
-      }
-    } while (true);
+    }
+    if (attempts > 10) {
+      throw new Error("无法生成唯一邀请码，请重试");
+    }
 
     // 创建群组
     const [group] = await this.db

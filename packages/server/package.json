@@ -32,17 +32,16 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
-    "@hono/eslint-config": "^2.0.5",
+    "@eslint/js": "^9.39.2",
     "@testing-library/jest-dom": "^6.1.5",
     "@vitest/ui": "^1.1.0",
     "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.53.1",
     "vitest": "^1.1.0",
     "wrangler": "^4.4.0"
   }
 }
-
-
-
