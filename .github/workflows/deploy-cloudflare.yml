@@ -3,6 +3,8 @@ name: ci-cd-cloudflare
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -33,8 +35,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint shared
+        run: pnpm -C packages/shared lint
+
+      - name: Typecheck shared
+        run: pnpm -C packages/shared typecheck
+
+      - name: Lint server
+        run: pnpm -C packages/server lint
+
+      - name: Typecheck server
+        run: pnpm -C packages/server typecheck
+
       - name: Run server tests
         run: CI=1 pnpm -C packages/server test:ci
+
+      - name: Lint web
+        run: pnpm -C packages/web lint
+
+      - name: Typecheck web
+        run: pnpm -C packages/web typecheck
 
       - name: Validate web env url format
         env:
@@ -78,6 +98,7 @@ jobs:
   deploy_api:
     runs-on: ubuntu-latest
     needs: ci
+    if: github.event_name != 'pull_request'
     environment: production
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -185,6 +206,7 @@ jobs:
   deploy_web:
     runs-on: ubuntu-latest
     needs: [ci, deploy_api]
+    if: github.event_name != 'pull_request'
     environment: production
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
