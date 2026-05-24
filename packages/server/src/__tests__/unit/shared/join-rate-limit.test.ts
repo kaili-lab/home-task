@@ -5,7 +5,7 @@ import {
   clearJoinFailureCounter,
   extractClientIp,
   type JoinRateLimitStore,
-} from "../utils/join-rate-limit";
+} from "../../../utils/join-rate-limit";
 
 describe("join-rate-limit", () => {
   it("应允许窗口内前 10 次请求，第 11 次被限制", () => {

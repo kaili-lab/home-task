@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { handleServiceError, ErrorCode, type ErrorResponse } from "../utils/error-handler";
+import { handleServiceError, ErrorCode, type ErrorResponse } from "../../../utils/error-handler";
 
 type MockResult = { data: ErrorResponse; status: number };
 

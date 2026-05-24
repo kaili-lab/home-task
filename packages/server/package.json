@@ -8,9 +8,10 @@
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest",
-    "test:ci": "vitest run --exclude \"src/__tests__/{ai/single-agent/external/aihubmix.llm.connectivity.test.ts,ai/multi-agent/eval/multi-agent.eval.test.ts}\"",
-    "test:external": "vitest run src/__tests__/ai/single-agent/external/aihubmix.llm.connectivity.test.ts src/__tests__/ai/multi-agent/eval/multi-agent.eval.test.ts",
+    "test": "vitest --exclude \"src/__tests__/{external,eval}/**\"",
+    "test:ci": "vitest run --exclude \"src/__tests__/{external,eval}/**\"",
+    "test:external": "vitest run \"src/__tests__/external/**/*.test.ts\"",
+    "test:eval": "vitest run \"src/__tests__/eval/**/*.test.ts\"",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "db-push": "npx drizzle-kit push"

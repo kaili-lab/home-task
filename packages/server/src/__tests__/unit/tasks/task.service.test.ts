@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { TaskService } from "../services/task.service";
+import { TaskService } from "../../../services/task.service";
 
 // 只保留 TaskService 会用到的方法，避免无关依赖干扰测试意图。
 function makeDb(overrides: Partial<any> = {}) {
